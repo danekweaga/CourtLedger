@@ -1,0 +1,118 @@
+import { useMemo, useRef } from "react";
+import type { Session } from "@supabase/supabase-js";
+import toast from "react-hot-toast";
+import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { AuthGate } from "./components/auth/AuthGate";
+import { AppFrame } from "./components/layout/AppFrame";
+import { ToastProvider } from "./components/ui/ToastProvider";
+import { createEmptyBetDraft } from "./utils/betDraft";
+import { useCourtLedgerData } from "./hooks/useCourtLedgerData";
+import { CommandCenterPage } from "./pages/CommandCenterPage";
+import { AnalyticsPage } from "./pages/AnalyticsPage";
+import { MarketIntelligencePage } from "./pages/MarketIntelligencePage";
+import { BetHistoryPage } from "./pages/BetHistoryPage";
+import { signOut } from "./lib/auth";
+
+function App() {
+  return (
+    <>
+      <AuthGate>{(session) => <CourtLedgerApp session={session} />}</AuthGate>
+      <ToastProvider />
+    </>
+  );
+}
+
+function CourtLedgerApp({ session }: { session: Session }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const data = useCourtLedgerData(session.user.id);
+  const formRef = useRef<HTMLDivElement | null>(null);
+
+  const frameConfig = useMemo(() => {
+    if (location.pathname === "/analytics") {
+      return { title: "Tactical Command Analytics", subtitle: "Performance diagnostics and risk intelligence", active: "analytics" as const };
+    }
+    if (location.pathname === "/markets") {
+      return { title: "Market Intelligence", subtitle: "Market heatmap, volume and tactical outlook", active: "markets" as const };
+    }
+    if (location.pathname === "/history") {
+      return { title: "Bet History", subtitle: "Ledger, outcomes and tactical audit trail", active: "history" as const };
+    }
+    return { title: "Command Center", subtitle: "Live tracking and execution dashboard", active: "command" as const };
+  }, [location.pathname]);
+
+  async function handleAddBetClick() {
+    if (location.pathname !== "/") {
+      navigate("/");
+      return;
+    }
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function handleSignOut() {
+    try {
+      await signOut();
+      toast.success("Logged out.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Logout failed.");
+    }
+  }
+
+  return (
+    <AppFrame session={session} title={frameConfig.title} subtitle={frameConfig.subtitle} activeNav={frameConfig.active} onAddBet={handleAddBetClick} onSignOut={handleSignOut}>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <CommandCenterPage
+              summary={data.summary}
+              filters={data.filters}
+              sort={data.sort}
+              draft={data.draft}
+              editingBet={data.editingBet}
+              saveLoading={data.saveLoading}
+              loadingBets={data.loadingBets}
+              activeBets={data.activeBets}
+              settledBets={data.settledBets}
+              filteredBets={data.filteredBets}
+              selectedStreamBet={data.selectedStreamBet}
+              formRef={formRef}
+              onFiltersChange={data.setFilters}
+              onSortChange={data.setSort}
+              onDraftChange={data.setDraft}
+              onSaveBet={data.saveBet}
+              onCancelEdit={() => {
+                data.setEditingBet(null);
+                data.setDraft(createEmptyBetDraft());
+              }}
+              onRefresh={() => void data.loadBets()}
+              onLoadSamples={() => void data.loadSampleData()}
+              onEdit={data.startEdit}
+              onDelete={(bet) => void data.removeBet(bet)}
+              onDuplicate={(bet) => void data.cloneBet(bet)}
+              onQuickGrade={(bet, result) => void data.gradeBet(bet, result)}
+              onLiveUpdate={(bet, currentStat) => void data.updateLiveStat(bet, currentStat)}
+              onSelectStream={data.setSelectedStreamBet}
+            />
+          }
+        />
+        <Route path="/analytics" element={<AnalyticsPage bets={data.bets} />} />
+        <Route path="/markets" element={<MarketIntelligencePage bets={data.bets} />} />
+        <Route
+          path="/history"
+          element={
+            <BetHistoryPage
+              bets={data.bets}
+              onEdit={data.startEdit}
+              onDelete={(bet) => void data.removeBet(bet)}
+              onDuplicate={(bet) => void data.cloneBet(bet)}
+              onQuickGrade={(bet, result) => void data.gradeBet(bet, result)}
+            />
+          }
+        />
+      </Routes>
+    </AppFrame>
+  );
+}
+
+export default App;
