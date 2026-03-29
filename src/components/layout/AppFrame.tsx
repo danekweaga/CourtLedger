@@ -6,7 +6,7 @@ interface AppFrameProps {
   session: Session;
   title: string;
   subtitle?: string;
-  activeNav: "command" | "history" | "markets" | "analytics";
+  activeNav: "command" | "history" | "markets" | "analytics" | "live" | "settings";
   onAddBet: () => void;
   onSignOut: () => void;
   children: ReactNode;
@@ -15,8 +15,10 @@ interface AppFrameProps {
 const navItems = [
   { key: "command", label: "Command Center", icon: "dashboard", to: "/" },
   { key: "history", label: "Bet History", icon: "receipt_long", to: "/history" },
+  { key: "live", label: "Live Center", icon: "live_tv", to: "/live" },
   { key: "markets", label: "Market Intelligence", icon: "query_stats", to: "/markets" },
   { key: "analytics", label: "ROI Analytics", icon: "payments", to: "/analytics" },
+  { key: "settings", label: "Settings", icon: "settings", to: "/settings" },
 ] as const;
 
 export function AppFrame({ session, title, subtitle, activeNav, onAddBet, onSignOut, children }: AppFrameProps) {
@@ -48,6 +50,7 @@ export function AppFrame({ session, title, subtitle, activeNav, onAddBet, onSign
         </nav>
         <div className="mt-auto space-y-3 p-4">
           <button
+            type="button"
             className="flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-primary-container px-4 py-3 text-sm font-bold text-[#002109] hover:opacity-90"
             onClick={onAddBet}
           >
@@ -55,6 +58,7 @@ export function AppFrame({ session, title, subtitle, activeNav, onAddBet, onSign
             Place New Bet
           </button>
           <button
+            type="button"
             className="flex w-full items-center gap-3 rounded-lg px-4 py-2 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200"
             onClick={onSignOut}
           >
@@ -76,15 +80,18 @@ export function AppFrame({ session, title, subtitle, activeNav, onAddBet, onSign
           <NavLink className="hidden text-sm text-slate-400 hover:text-slate-200 md:block" to="/history">
             History
           </NavLink>
+          <NavLink className="hidden text-sm text-slate-400 hover:text-slate-200 md:block" to="/live">
+            Live
+          </NavLink>
           <NavLink className="hidden text-sm text-slate-400 hover:text-slate-200 md:block" to="/markets">
             Markets
           </NavLink>
-          <button className="rounded-lg p-2 text-slate-400 hover:bg-slate-800/50">
+          <button type="button" className="rounded-lg p-2 text-slate-400 hover:bg-slate-800/50">
             <span className="material-symbols-outlined">notifications</span>
           </button>
-          <button className="rounded-lg p-2 text-slate-400 hover:bg-slate-800/50">
+          <NavLink className="rounded-lg p-2 text-slate-400 hover:bg-slate-800/50 hover:text-slate-200" to="/settings">
             <span className="material-symbols-outlined">settings</span>
-          </button>
+          </NavLink>
           <div className="rounded-full border border-emerald-400/20 bg-surface-container-high px-2 py-1 text-xs text-slate-300">
             {session.user.email}
           </div>
@@ -98,8 +105,10 @@ export function AppFrame({ session, title, subtitle, activeNav, onAddBet, onSign
       <nav className="fixed bottom-0 left-0 z-50 flex w-full items-center justify-around rounded-t-3xl bg-slate-950/80 px-4 pb-6 pt-3 shadow-[0_-8px_30px_rgb(6,14,32,0.5)] backdrop-blur-2xl lg:hidden">
         <MobileItem to="/analytics" icon="analytics" label="Stats" active={activeNav === "analytics"} />
         <MobileItem to="/history" icon="history" label="History" active={activeNav === "history"} />
-        <MobileItem to="/markets" icon="leaderboard" label="Markets" active={activeNav === "markets"} />
+        <MobileItem to="/live" icon="live_tv" label="Live" active={activeNav === "live"} />
+        <MobileItem to="/settings" icon="settings" label="Settings" active={activeNav === "settings"} />
         <button
+          type="button"
           className="flex flex-col items-center justify-center rounded-2xl px-6 py-2 text-slate-500 transition-all duration-200 active:scale-90"
           onClick={onAddBet}
         >

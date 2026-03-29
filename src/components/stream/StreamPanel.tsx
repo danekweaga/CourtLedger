@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Bet } from "../../types/bets";
+import { normalizeHttpUrl } from "../../utils/url";
 
 interface StreamPanelProps {
   selectedBet: Bet | null;
@@ -10,11 +11,12 @@ export function StreamPanel({ selectedBet, onClose }: StreamPanelProps) {
   const [embedFailed, setEmbedFailed] = useState(false);
   const streamUrl = selectedBet?.stream_url ?? "";
   const source = useMemo(() => {
-    if (!streamUrl) {
+    const normalized = normalizeHttpUrl(streamUrl);
+    if (!normalized) {
       return "";
     }
     try {
-      return new URL(streamUrl).toString();
+      return new URL(normalized).toString();
     } catch {
       return "";
     }
@@ -45,13 +47,23 @@ export function StreamPanel({ selectedBet, onClose }: StreamPanelProps) {
           </a>
         </div>
       ) : (
-        <iframe
-          className="mt-3 h-72 w-full rounded-lg border border-slate-700"
-          src={source}
-          title="Bet stream"
-          referrerPolicy="no-referrer"
-          onError={() => setEmbedFailed(true)}
-        />
+        <div className="mt-3 space-y-2">
+          <a
+            className="inline-flex rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-slate-500"
+            href={source}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open Stream In New Tab
+          </a>
+          <iframe
+            className="h-72 w-full rounded-lg border border-slate-700"
+            src={source}
+            title="Bet stream"
+            referrerPolicy="no-referrer"
+            onError={() => setEmbedFailed(true)}
+          />
+        </div>
       )}
     </section>
   );

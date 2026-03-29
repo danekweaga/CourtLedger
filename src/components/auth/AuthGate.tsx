@@ -3,6 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import toast from "react-hot-toast";
 import { getSession, onAuthStateChange, signIn, signUp } from "../../lib/auth";
 import { AuthForm } from "./AuthForm";
+import { PublicHome } from "./PublicHome";
 
 interface AuthGateProps {
   children: (session: Session) => ReactNode;
@@ -12,6 +13,7 @@ export function AuthGate({ children }: AuthGateProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [authActionLoading, setAuthActionLoading] = useState(false);
+  const [showAuthForm, setShowAuthForm] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -65,6 +67,9 @@ export function AuthGate({ children }: AuthGateProps) {
   }
 
   if (!session) {
+    if (!showAuthForm) {
+      return <PublicHome onContinue={() => setShowAuthForm(true)} />;
+    }
     return <AuthForm loading={authActionLoading} onLogin={handleLogin} onSignup={handleSignup} />;
   }
 

@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import type { Bet } from "../types/bets";
 import { computeSummaryStats, profitBySportsbook, profitOverTime } from "../utils/analytics";
 
@@ -6,10 +7,37 @@ interface AnalyticsPageProps {
 }
 
 export function AnalyticsPage({ bets }: AnalyticsPageProps) {
-  const summary = computeSummaryStats(bets);
-  const timeSeries = profitOverTime(bets);
-  const sportsbook = profitBySportsbook(bets).slice(0, 4);
+  const [range, setRange] = useState<"30d" | "90d" | "all">("30d");
+
+  const filteredBets = useMemo(() => {
+    if (range === "all") {
+      return bets;
+    }
+    const now = new Date();
+    const start = new Date(now);
+    start.setDate(now.getDate() - (range === "30d" ? 30 : 90));
+    const min = start.getTime();
+    const max = now.getTime();
+
+    return bets.filter((bet) => {
+      const raw = bet.date_placed || bet.game_date;
+      if (!raw) {
+        return false;
+      }
+      const parsed = new Date(raw);
+      const time = parsed.getTime();
+      if (Number.isNaN(time)) {
+        return false;
+      }
+      return time >= min && time <= max;
+    });
+  }, [bets, range]);
+
+  const summary = useMemo(() => computeSummaryStats(filteredBets), [filteredBets]);
+  const timeSeries = useMemo(() => profitOverTime(filteredBets), [filteredBets]);
+  const sportsbook = useMemo(() => profitBySportsbook(filteredBets).slice(0, 4), [filteredBets]);
   const maxProfit = Math.max(...sportsbook.map((book) => Math.abs(book.value)), 1);
+  const hasData = filteredBets.length > 0;
 
   return (
     <div className="space-y-10">
@@ -19,19 +47,42 @@ export function AnalyticsPage({ bets }: AnalyticsPageProps) {
           <p className="font-body text-on-surface-variant">Tactical breakdown of your betting lifecycle and market edge.</p>
         </div>
         <div className="flex items-center gap-3 rounded-full border border-outline-variant/10 bg-surface-container-low p-1.5">
-          <button className="rounded-full bg-surface-container-highest px-5 py-2 text-xs font-bold uppercase tracking-widest text-primary shadow-lg">
+          <button
+            type="button"
+            className={`rounded-full px-5 py-2 text-xs font-bold uppercase tracking-widest transition-colors ${range === "30d" ? "bg-surface-container-highest text-primary shadow-lg" : "text-on-surface-variant hover:text-on-surface"}`}
+            onClick={() => setRange("30d")}
+          >
             Last 30 Days
           </button>
-          <button className="px-5 py-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant hover:text-on-surface">90 Days</button>
-          <button className="px-5 py-2 text-xs font-bold uppercase tracking-widest text-on-surface-variant hover:text-on-surface">All Time</button>
-          <button className="p-2 text-on-surface-variant hover:text-primary">
+          <button
+            type="button"
+            className={`px-5 py-2 text-xs font-bold uppercase tracking-widest transition-colors ${range === "90d" ? "rounded-full bg-surface-container-highest text-primary shadow-lg" : "text-on-surface-variant hover:text-on-surface"}`}
+            onClick={() => setRange("90d")}
+          >
+            90 Days
+          </button>
+          <button
+            type="button"
+            className={`px-5 py-2 text-xs font-bold uppercase tracking-widest transition-colors ${range === "all" ? "rounded-full bg-surface-container-highest text-primary shadow-lg" : "text-on-surface-variant hover:text-on-surface"}`}
+            onClick={() => setRange("all")}
+          >
+            All Time
+          </button>
+          <button type="button" className="p-2 text-on-surface-variant hover:text-primary" aria-label="date range">
             <span className="material-symbols-outlined">calendar_today</span>
           </button>
         </div>
       </header>
 
+      {!hasData && (
+        <div className="rounded-xl border border-outline-variant/20 bg-surface-container p-8 text-center">
+          <p className="font-headline text-xl font-bold text-on-surface">No bets in this range</p>
+          <p className="mt-2 text-sm text-on-surface-variant">Try 90 days or All Time to view analytics.</p>
+        </div>
+      )}
+
       <section className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <MetricCard title="Lifetime ROI" value={`${summary.roi >= 0 ? "+" : ""}${summary.roi}%`} tone="primary" subtitle="From all settled bets" />
+        <MetricCard title="Lifetime ROI" value={`${summary.roi >= 0 ? "+" : ""}${summary.roi}%`} tone="primary" subtitle={`From ${filteredBets.length} bets`} />
         <MetricCard title="Max Drawdown" value={`${Math.max(0, 100 - summary.winRate).toFixed(1)}%`} tone="error" subtitle="Risk profile: Conservative" />
         <MetricCard title="Efficiency Ratio" value={`${Math.max(0.8, summary.winRate / 22).toFixed(2)}`} tone="secondary" subtitle="Risk-adjusted consistency" />
         <MetricCard title="Net Profit" value={`$${summary.totalProfit.toFixed(2)}`} tone="neutral" subtitle={`Across ${summary.totalBets} bets`} />
@@ -102,9 +153,24 @@ export function AnalyticsPage({ bets }: AnalyticsPageProps) {
           </div>
         </div>
         <div className="flex flex-col gap-6">
-          <InsightCard icon="lightbulb" color="primary" title="Lakers Synergy" text="Your Lakers-related bets are outperforming your global average win rate by +12.8%." />
-          <InsightCard icon="verified_user" color="secondary" title="Market Strategy" text="Player props continue to be your strongest market; consider increasing unit size on high-confidence spots." />
-          <InsightCard icon="warning" color="error" title="Parlay Drain" text="Multi-leg parlays are dragging ROI relative to singles. Consider trimming low-edge legs." />
+          <InsightCard
+            icon="lightbulb"
+            color="primary"
+            title="Win-Rate Signal"
+            text={`Current window win rate is ${summary.winRate.toFixed(1)}% with ${summary.wins} wins and ${summary.losses} losses.`}
+          />
+          <InsightCard
+            icon="verified_user"
+            color="secondary"
+            title="Market Strategy"
+            text={summary.roi >= 0 ? "Current ROI is positive. Keep sizing disciplined around strongest edges." : "Current ROI is negative. Reduce exposure and review lower-performing markets."}
+          />
+          <InsightCard
+            icon="warning"
+            color="error"
+            title="Risk Control"
+            text={`Average stake is $${summary.averageStake.toFixed(2)}. Keep bankroll risk per bet consistent to stabilize variance.`}
+          />
         </div>
       </section>
     </div>

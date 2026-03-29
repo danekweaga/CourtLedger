@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { Session } from "@supabase/supabase-js";
 import toast from "react-hot-toast";
 import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
@@ -11,6 +11,8 @@ import { CommandCenterPage } from "./pages/CommandCenterPage";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
 import { MarketIntelligencePage } from "./pages/MarketIntelligencePage";
 import { BetHistoryPage } from "./pages/BetHistoryPage";
+import { LiveCenterPage } from "./pages/LiveCenterPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { signOut } from "./lib/auth";
 
 function App() {
@@ -35,19 +37,35 @@ function CourtLedgerApp({ session }: { session: Session }) {
     if (location.pathname === "/markets") {
       return { title: "Market Intelligence", subtitle: "Market heatmap, volume and tactical outlook", active: "markets" as const };
     }
+    if (location.pathname === "/live") {
+      return { title: "Live Center", subtitle: "Stream panel and live stat tracking", active: "live" as const };
+    }
     if (location.pathname === "/history") {
       return { title: "Bet History", subtitle: "Ledger, outcomes and tactical audit trail", active: "history" as const };
+    }
+    if (location.pathname === "/settings") {
+      return { title: "Settings", subtitle: "Account and preferences", active: "settings" as const };
     }
     return { title: "Command Center", subtitle: "Live tracking and execution dashboard", active: "command" as const };
   }, [location.pathname]);
 
   async function handleAddBetClick() {
     if (location.pathname !== "/") {
-      navigate("/");
+      navigate("/?focus=bet-form");
       return;
     }
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (location.pathname === "/" && params.get("focus") === "bet-form") {
+      requestAnimationFrame(() => {
+        formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      navigate("/", { replace: true });
+    }
+  }, [location.pathname, location.search, navigate]);
 
   async function handleSignOut() {
     try {
@@ -99,6 +117,17 @@ function CourtLedgerApp({ session }: { session: Session }) {
         <Route path="/analytics" element={<AnalyticsPage bets={data.bets} />} />
         <Route path="/markets" element={<MarketIntelligencePage bets={data.bets} />} />
         <Route
+          path="/live"
+          element={
+            <LiveCenterPage
+              activeBets={data.activeBets}
+              selectedStreamBet={data.selectedStreamBet}
+              onSelectStream={data.setSelectedStreamBet}
+              onManualLiveUpdate={(bet, value) => void data.updateLiveStat(bet, value)}
+            />
+          }
+        />
+        <Route
           path="/history"
           element={
             <BetHistoryPage
@@ -110,6 +139,7 @@ function CourtLedgerApp({ session }: { session: Session }) {
             />
           }
         />
+        <Route path="/settings" element={<SettingsPage session={session} />} />
       </Routes>
     </AppFrame>
   );

@@ -150,7 +150,7 @@ export function BetHistoryPage({ bets, onEdit, onDelete, onDuplicate, onQuickGra
                       </span>
                     </td>
                     <td className="px-6 py-5 text-right">
-                      <div className="opacity-0 transition-opacity group-hover:opacity-100">
+                      <div className="opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                         <BetRowActions bet={bet} onEdit={onEdit} onDelete={onDelete} onDuplicate={onDuplicate} onQuickGrade={onQuickGrade} />
                       </div>
                     </td>

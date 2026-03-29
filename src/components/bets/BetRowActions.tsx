@@ -13,22 +13,22 @@ export function BetRowActions({ bet, onEdit, onDelete, onDuplicate, onQuickGrade
 
   return (
     <div className="flex flex-wrap gap-1">
-      <button className={buttonClass} onClick={() => onEdit(bet)}>
+      <button type="button" className={buttonClass} onClick={() => onEdit(bet)}>
         Edit
       </button>
-      <button className={buttonClass} onClick={() => onDuplicate(bet)}>
+      <button type="button" className={buttonClass} onClick={() => onDuplicate(bet)}>
         Duplicate
       </button>
-      <button className={buttonClass} onClick={() => onQuickGrade(bet, "win")}>
+      <button type="button" className={buttonClass} onClick={() => onQuickGrade(bet, "win")}>
         Mark Win
       </button>
-      <button className={buttonClass} onClick={() => onQuickGrade(bet, "loss")}>
+      <button type="button" className={buttonClass} onClick={() => onQuickGrade(bet, "loss")}>
         Mark Loss
       </button>
-      <button className={buttonClass} onClick={() => onQuickGrade(bet, "push")}>
+      <button type="button" className={buttonClass} onClick={() => onQuickGrade(bet, "push")}>
         Mark Push
       </button>
-      <button className="rounded-lg bg-rose-500/15 px-2 py-1 text-[10px] font-semibold text-rose-300 hover:bg-rose-500/25" onClick={() => onDelete(bet)}>
+      <button type="button" className="rounded-lg bg-rose-500/15 px-2 py-1 text-[10px] font-semibold text-rose-300 hover:bg-rose-500/25" onClick={() => onDelete(bet)}>
         Delete
       </button>
     </div>
