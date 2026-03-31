@@ -73,7 +73,7 @@ async function describeInvokeFailure(error: unknown, invokeResponse?: Response |
     const body = res ? await readResponseDetail(res) : "";
     const hint =
       status === 404
-        ? "Deploy: npx supabase functions deploy nba-odds-slate"
+        ? "Function not found (404). Almost always: VITE_SUPABASE_URL is a different Supabase project than where you deployed. The ref in https://YOUR_REF.supabase.co must match Dashboard → Edge Functions (where nba-odds-slate appears). Fix .env, restart npm run dev. If it is still missing on that project: npx supabase functions deploy nba-odds-slate"
         : status === 401
           ? "Sign out and sign in again. VITE_SUPABASE_* must be the same project as the function."
           : status === 502
