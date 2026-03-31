@@ -124,11 +124,13 @@ function classifyInvokeFailure(args: { error: unknown; status: number; bodyText:
     );
   }
   const edgeCode = parsed?.code ?? "";
+  const gatewayInvalidJwt = /invalid\s+jwt/i.test(bodyText) && !edgeCode;
   const invalidJwt = /invalid\s+jwt/i.test(bodyText) || edgeCode.includes("TOKEN_REF_MISMATCH");
   if (status === 401 && invalidJwt) {
+    const prefix = gatewayInvalidJwt ? "Supabase gateway rejected JWT." : "Edge auth rejected JWT.";
     return new OddsSlateError(
       "AuthTokenInvalid",
-      `Invalid auth token for Edge Functions. Sign out and sign in again. If it persists, verify Supabase project alignment (${getSupabaseRefDiagnostic()}).`,
+      `${prefix} Sign out and sign in again. If it persists, verify Supabase project alignment (${getSupabaseRefDiagnostic()}).`,
       401,
       true,
       bodyText || null,
@@ -179,11 +181,10 @@ function classifyInvokeFailure(args: { error: unknown; status: number; bodyText:
   return new OddsSlateError("UnknownInvokeError", String(error), status, false, bodyText || null);
 }
 
-async function invokeNbaOddsSlate(accessToken: string) {
+async function invokeNbaOddsSlate() {
   return supabase.functions.invoke<NbaOddsSlateResponse>("nba-odds-slate", {
     body: {},
     timeout: INVOKE_TIMEOUT_MS,
-    headers: { Authorization: `Bearer ${accessToken}` },
   });
 }
 
@@ -216,11 +217,10 @@ export async function fetchNbaOddsSlateScenarios(): Promise<NbaOddsSlateResponse
     throw new OddsSlateError("AuthSessionMissing", "You must be signed in to load odds. Sign in and try again.", 401);
   }
 
-  let token = currentSession.access_token;
   let triedRefresh = false;
 
   for (;;) {
-    const { data, error, response } = await invokeNbaOddsSlate(token);
+    const { data, error, response } = await invokeNbaOddsSlate();
     if (!error) {
       return normalizeResponse(data);
     }
@@ -241,7 +241,18 @@ export async function fetchNbaOddsSlateScenarios(): Promise<NbaOddsSlateResponse
           refreshError?.message ?? null,
         );
       }
-      token = refreshed.session.access_token;
+
+      const { error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        throw new OddsSlateError(
+          "AuthSessionMissing",
+          "Session refresh did not yield a usable auth token. Sign in again and retry.",
+          401,
+          false,
+          userError.message,
+        );
+      }
+
       continue;
     }
 
