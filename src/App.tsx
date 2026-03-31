@@ -121,7 +121,17 @@ function CourtLedgerApp({ session }: { session: Session }) {
           }
         />
         <Route path="/analytics" element={<AnalyticsPage bets={data.bets} />} />
-        <Route path="/intelligence" element={<BetIntelligencePage userId={session.user.id} bets={data.bets} />} />
+        <Route
+          path="/intelligence"
+          element={
+            <BetIntelligencePage
+              userId={session.user.id}
+              bets={data.bets}
+              saveLoading={data.saveLoading}
+              onAddFromIntelligence={data.addBetFromIntelligence}
+            />
+          }
+        />
         <Route path="/markets" element={<MarketIntelligencePage bets={data.bets} />} />
         <Route
           path="/live"

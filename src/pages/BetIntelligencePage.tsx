@@ -1,6 +1,11 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Bet } from "../types/bets";
-import type { BetIntelligenceReportRow, IntelligenceReportResult } from "../types/betIntelligence";
+import type {
+  BetIntelligenceReportRow,
+  BetIntelligenceScenarioInput,
+  IntelligenceReportResult,
+} from "../types/betIntelligence";
 import { analyzeBetIntelligence } from "../lib/betIntelligenceEngine";
 import { rowToReportResult } from "../lib/betIntelligenceService";
 import { BetIntelligencePanel } from "../components/intelligence/BetIntelligencePanel";
@@ -12,9 +17,15 @@ import { emptyIntelligenceScenario, parseInputSnapshot } from "../utils/intellig
 interface BetIntelligencePageProps {
   userId: string;
   bets: Bet[];
+  saveLoading?: boolean;
+  onAddFromIntelligence?: (
+    scenario: BetIntelligenceScenarioInput,
+    options?: { source?: "top_picks" | "intelligence_analysis"; report?: IntelligenceReportResult | null },
+  ) => Promise<void>;
 }
 
-export function BetIntelligencePage({ userId, bets }: BetIntelligencePageProps) {
+export function BetIntelligencePage({ userId, bets, saveLoading = false, onAddFromIntelligence }: BetIntelligencePageProps) {
+  const navigate = useNavigate();
   const { reports, loading, saving, saveReport, removeReport } = useIntelligenceReports(userId);
   const [scenario, setScenario] = useState(emptyIntelligenceScenario);
   const [report, setReport] = useState<IntelligenceReportResult | null>(null);
@@ -43,6 +54,22 @@ export function BetIntelligencePage({ userId, bets }: BetIntelligencePageProps) 
     }
     const betId = attachBetId === "" ? null : attachBetId;
     await saveReport(scenario, report, betId);
+  }
+
+  async function handleAddAnalysisToTracker() {
+    if (!onAddFromIntelligence || !report) {
+      return;
+    }
+    await onAddFromIntelligence(scenario, { source: "intelligence_analysis", report });
+    navigate("/");
+  }
+
+  async function handleAddTopPickToTracker(s: BetIntelligenceScenarioInput) {
+    if (!onAddFromIntelligence) {
+      return;
+    }
+    await onAddFromIntelligence(s, { source: "top_picks" });
+    navigate("/");
   }
 
   const pendingBets = bets.filter((b) => b.result_status === "pending");
@@ -104,7 +131,15 @@ export function BetIntelligencePage({ userId, bets }: BetIntelligencePageProps) 
         </div>
 
         <div className="space-y-6 xl:col-span-7">
-          {report ? <AnalysisResultCard report={report} /> : <PlaceholderCard />}
+          {report ? (
+            <AnalysisResultCard
+              report={report}
+              saveLoading={saveLoading}
+              onAddToTracker={onAddFromIntelligence ? () => void handleAddAnalysisToTracker() : undefined}
+            />
+          ) : (
+            <PlaceholderCard />
+          )}
 
           <section className="rounded-2xl border border-slate-800 bg-slate-900/30 p-4">
             <div className="mb-3 flex items-center justify-between">
@@ -136,7 +171,7 @@ export function BetIntelligencePage({ userId, bets }: BetIntelligencePageProps) 
         </div>
       </div>
 
-      <TopPicksToday />
+      <TopPicksToday saveLoading={saveLoading} onAddToTracker={onAddFromIntelligence ? handleAddTopPickToTracker : undefined} />
     </div>
   );
 }

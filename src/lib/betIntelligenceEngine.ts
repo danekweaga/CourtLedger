@@ -251,7 +251,12 @@ function toTopPickCard(scenario: BetIntelligenceScenarioInput, report: Intellige
   };
 }
 
-export function buildTopPicksToday(candidates: BetIntelligenceScenarioInput[]): TopPickCardModel[] {
+export interface TopPickWithScenario {
+  card: TopPickCardModel;
+  scenario: BetIntelligenceScenarioInput;
+}
+
+function selectTopPickAnalyses(candidates: BetIntelligenceScenarioInput[]): { scenario: BetIntelligenceScenarioInput; report: IntelligenceReportResult }[] {
   if (candidates.length === 0) {
     return [];
   }
@@ -276,7 +281,18 @@ export function buildTopPicksToday(candidates: BetIntelligenceScenarioInput[]): 
 
   filtered.sort((a, b) => b.report.edge_score - a.report.edge_score || b.report.calibrated_hit_probability - a.report.calibrated_hit_probability);
 
-  return filtered.slice(0, 5).map(({ scenario, report }) => toTopPickCard(scenario, report));
+  return filtered.slice(0, 5);
+}
+
+export function buildTopPicksTodayWithScenarios(candidates: BetIntelligenceScenarioInput[]): TopPickWithScenario[] {
+  return selectTopPickAnalyses(candidates).map(({ scenario, report }) => ({
+    card: toTopPickCard(scenario, report),
+    scenario,
+  }));
+}
+
+export function buildTopPicksToday(candidates: BetIntelligenceScenarioInput[]): TopPickCardModel[] {
+  return selectTopPickAnalyses(candidates).map(({ scenario, report }) => toTopPickCard(scenario, report));
 }
 
 export function summarizeSlate(picks: TopPickCardModel[], candidates: BetIntelligenceScenarioInput[]): string {

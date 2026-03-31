@@ -61,6 +61,14 @@ export interface Bet {
   units_staked: number | null;
   game_status: string | null;
   player_active_status: string | null;
+  /** When true, backend job grades this bet from NBA box scores (player props only). */
+  auto_settle_enabled: boolean;
+  /** balldontlie player id; speeds up sync and avoids ambiguous name search. */
+  stats_player_id: number | null;
+  /** Cached balldontlie game id after first successful resolution. */
+  stats_game_id: number | null;
+  last_auto_settle_at: string | null;
+  auto_settle_error: string | null;
   created_at: string;
   updated_at: string;
 }

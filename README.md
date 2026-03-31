@@ -12,6 +12,8 @@ CourtLedger is a one-page, full-stack NBA betting dashboard built with React, Ty
 - Analytics charts (profit over time, by market type, by sportsbook).
 - CSV and XLSX exports for all or filtered datasets.
 - Stream URL panel with embed fallback.
+- Bet Intelligence **Add to tracker** from Top Picks or a single analysis run (creates a pending bet with auto-settle enabled).
+- Optional **auto-settle** for supported NBA player props via Supabase Edge Function + [balldontlie](https://www.balldontlie.io) (points, rebounds, assists, threes, PRA, steals, blocks, turnovers).
 
 ## Stack
 
@@ -55,6 +57,44 @@ Policies are idempotent (dropped before recreate). Command Center includes an **
 This creates the table, RLS, indexes, and `updated_at` trigger. The app route is **`/intelligence`** (sidebar: **Bet Intelligence**).
 
 **Code map:** types `src/types/betIntelligence.ts`; engine `src/lib/betIntelligenceEngine.ts` plus `projectionEngine`, `lineMovement`, `edgeScoring`, `simulationEngine`, `riskAssessment`; Supabase `src/lib/betIntelligenceService.ts`; hook `src/hooks/useIntelligenceReports.ts`; UI `src/components/intelligence/*` and page `src/pages/BetIntelligencePage.tsx`. Future feeds: `src/lib/intelligenceDataProvider.ts`. Sample slate rows: `src/data/sampleBetIntelligence.ts`.
+
+### Auto-settle columns on `bets`
+
+Run the migration in the Supabase SQL editor (or via CLI):
+
+- `supabase/migrations/20260330140000_bets_auto_settle.sql`
+
+Adds `auto_settle_enabled`, `stats_player_id`, `stats_game_id`, `last_auto_settle_at`, and `auto_settle_error`. The app uses **column pruning** on insert/update, so older schemas still load until you migrate.
+
+**UI:** Command Center bet form includes **Auto-settle** and optional **Stats API player/game id** fields (advanced). Active bets show an **Auto-settle on** label and any settle error hint.
+
+### Edge Function `sync-bet-settlements`
+
+Deploy with the [Supabase CLI](https://supabase.com/docs/guides/functions):
+
+```bash
+supabase functions deploy sync-bet-settlements --no-verify-jwt
+```
+
+Set secrets in the Supabase project (**Edge Functions → Secrets** or CLI):
+
+- `BALLDONTLIE_API_KEY` — from your balldontlie account; sent as the `Authorization` header.
+- `CRON_SECRET` — optional; when set, every invocation must include header `x-cron-secret: <same value>`.
+
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are usually injected for Edge Functions automatically.
+
+**Invoke manually (POST):**
+
+```bash
+curl -X POST "https://<project-ref>.supabase.co/functions/v1/sync-bet-settlements" \
+  -H "x-cron-secret: YOUR_CRON_SECRET"
+```
+
+**Schedule:** Use Supabase **pg_net** + **pg_cron**, GitHub Actions, or another cron to POST every 15–30 minutes during game windows. Respect balldontlie rate limits on your plan.
+
+**Behavior notes:** Matching uses `game_date` and `team` / `opponent` (abbreviations like `BOS` / `LAL` work best). Wrong or ambiguous matches produce `auto_settle_error` until you fix team text or set **Stats API player id** / **game id** on the bet. Moneyline, spread, and game totals are **not** auto-graded. Settlement rules are simple numeric O/U (not book-specific void/half rules).
+
+**Shared logic:** `src/utils/propSettlement.ts` mirrors the Edge Function grading rules; keep them aligned if you change one.
 
 ## Manual Live Tracking and Future API Integration
 

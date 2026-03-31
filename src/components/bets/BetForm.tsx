@@ -79,6 +79,19 @@ export function BetForm({ editingBet, draft, onChange, onSubmit, onCancelEdit, l
           <span className="font-bold text-primary">${draft.potential_payout.toFixed(2)}</span>
         </div>
 
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-primary/15 bg-surface-container-low/80 px-3 py-3 text-xs text-slate-200">
+          <input
+            type="checkbox"
+            className="mt-0.5 rounded border-slate-600"
+            checked={draft.auto_settle_enabled}
+            onChange={(e) => setValue("auto_settle_enabled", e.target.checked)}
+          />
+          <span>
+            <span className="font-bold text-primary">Auto-settle</span> from NBA box scores when the game goes final (supported player props only: points, rebounds,
+            assists, threes, PRA, steals, blocks, turnovers). Requires the sync job and a balldontlie API key in Supabase.
+          </span>
+        </label>
+
         <div className="grid grid-cols-2 gap-2">
           <input className={fieldClass} placeholder="Player Name" value={draft.player_name} onChange={(e) => setValue("player_name", e.target.value)} />
           <input className={fieldClass} placeholder="Sportsbook" value={draft.sportsbook} onChange={(e) => setValue("sportsbook", e.target.value)} />
@@ -127,6 +140,20 @@ export function BetForm({ editingBet, draft, onChange, onSubmit, onCancelEdit, l
             <input className={fieldClass} type="number" step="0.01" placeholder="Cash Out Amount" value={draft.cash_out_amount ?? ""} onChange={(e) => setValue("cash_out_amount", e.target.value ? Number(e.target.value) : null)} />
             <input className={fieldClass} placeholder="Game Status" value={draft.game_status ?? ""} onChange={(e) => setValue("game_status", e.target.value)} />
             <input className={fieldClass} placeholder="Player Active Status" value={draft.player_active_status ?? ""} onChange={(e) => setValue("player_active_status", e.target.value)} />
+            <input
+              className={fieldClass}
+              type="number"
+              placeholder="Stats API player id (optional)"
+              value={draft.stats_player_id ?? ""}
+              onChange={(e) => setValue("stats_player_id", e.target.value === "" ? null : Number(e.target.value))}
+            />
+            <input
+              className={fieldClass}
+              type="number"
+              placeholder="Stats API game id (optional)"
+              value={draft.stats_game_id ?? ""}
+              onChange={(e) => setValue("stats_game_id", e.target.value === "" ? null : Number(e.target.value))}
+            />
           </div>
           <textarea className={`${fieldClass} mt-2`} rows={2} placeholder="Notes" value={draft.notes ?? ""} onChange={(e) => setValue("notes", e.target.value)} />
           <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-300">

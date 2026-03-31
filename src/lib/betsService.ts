@@ -6,6 +6,17 @@ import { gradeBetByManualResult } from "../utils/grading";
 const BETS_TABLE = "bets";
 const MAX_COLUMN_PRUNE_RETRIES = 12;
 
+export function normalizeBetRow(row: Bet): Bet {
+  return {
+    ...row,
+    auto_settle_enabled: row.auto_settle_enabled ?? false,
+    stats_player_id: row.stats_player_id ?? null,
+    stats_game_id: row.stats_game_id ?? null,
+    last_auto_settle_at: row.last_auto_settle_at ?? null,
+    auto_settle_error: row.auto_settle_error ?? null,
+  };
+}
+
 function withComputedFields(draft: BetDraft): BetDraft {
   const payout = computePotentialPayout(draft.stake, draft.odds);
   const resultStatus = draft.result_status;
@@ -40,7 +51,7 @@ async function insertBetWithColumnPruning(payload: Record<string, unknown>): Pro
   for (let attempt = 0; attempt < MAX_COLUMN_PRUNE_RETRIES; attempt += 1) {
     const { data, error } = await supabase.from(BETS_TABLE).insert([candidate]).select("*").single();
     if (!error) {
-      return data as Bet;
+      return normalizeBetRow(data as Bet);
     }
 
     const missingColumn = extractMissingColumn(error);
@@ -57,7 +68,7 @@ async function updateBetWithColumnPruning(id: string, payload: Record<string, un
   for (let attempt = 0; attempt < MAX_COLUMN_PRUNE_RETRIES; attempt += 1) {
     const { data, error } = await supabase.from(BETS_TABLE).update(candidate).eq("id", id).select("*").single();
     if (!error) {
-      return data as Bet;
+      return normalizeBetRow(data as Bet);
     }
 
     const missingColumn = extractMissingColumn(error);
@@ -79,7 +90,7 @@ export async function fetchBets(userId: string): Promise<Bet[]> {
   if (error) {
     throw error;
   }
-  return (data ?? []) as Bet[];
+  return ((data ?? []) as Bet[]).map(normalizeBetRow);
 }
 
 export async function createBet(userId: string, draft: BetDraft): Promise<Bet> {
@@ -120,6 +131,9 @@ export async function duplicateBet(userId: string, bet: Bet): Promise<Bet> {
     notes: bet.notes ? `${bet.notes} (Duplicated)` : "Duplicated bet",
     game_status: "Scheduled",
     player_active_status: "Unknown",
+    stats_game_id: null,
+    last_auto_settle_at: null,
+    auto_settle_error: null,
   };
   return createBet(userId, copyDraft);
 }
@@ -139,5 +153,5 @@ export async function quickGradeBet(id: string, resultStatus: Exclude<BetResultS
   if (error) {
     throw error;
   }
-  return data as Bet;
+  return normalizeBetRow(data as Bet);
 }

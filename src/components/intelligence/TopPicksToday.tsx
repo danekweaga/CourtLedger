@@ -1,13 +1,22 @@
 import { useMemo, useState } from "react";
 import type { BetIntelligenceScenarioInput } from "../../types/betIntelligence";
-import { buildTopPicksToday, summarizeSlate } from "../../lib/betIntelligenceEngine";
+import { buildTopPicksTodayWithScenarios, summarizeSlate } from "../../lib/betIntelligenceEngine";
 import { sampleBetIntelligenceScenarios } from "../../data/sampleBetIntelligence";
 import { emptyIntelligenceScenario } from "../../utils/intelligenceForm";
 
-export function TopPicksToday() {
+interface TopPicksTodayProps {
+  saveLoading?: boolean;
+  onAddToTracker?: (scenario: BetIntelligenceScenarioInput) => Promise<void>;
+}
+
+export function TopPicksToday({ saveLoading = false, onAddToTracker }: TopPicksTodayProps) {
   const [rows, setRows] = useState<BetIntelligenceScenarioInput[]>(() => [emptyIntelligenceScenario(), emptyIntelligenceScenario()]);
 
-  const picks = useMemo(() => buildTopPicksToday(rows.filter((r) => r.player_name.trim() && r.team.trim())), [rows]);
+  const picksWithScenarios = useMemo(
+    () => buildTopPicksTodayWithScenarios(rows.filter((r) => r.player_name.trim() && r.team.trim())),
+    [rows],
+  );
+  const picks = useMemo(() => picksWithScenarios.map((x) => x.card), [picksWithScenarios]);
   const slateInsight = useMemo(() => summarizeSlate(picks, rows), [picks, rows]);
 
   function updateRow(index: number, patch: Partial<BetIntelligenceScenarioInput>) {
@@ -127,7 +136,7 @@ export function TopPicksToday() {
         </p>
       ) : (
         <div className="mt-6 space-y-4">
-          {picks.map((p, idx) => (
+          {picksWithScenarios.map(({ card: p, scenario }, idx) => (
             <article key={`${idx}-${p.pick}`} className="rounded-xl border border-cyan-500/20 bg-slate-950/60 p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
@@ -136,7 +145,19 @@ export function TopPicksToday() {
                     Line {p.line} · Proj {p.projection} · {((p.hit_probability ?? 0) * 100).toFixed(1)}% · {p.confidence} · Edge {p.edge_score}
                   </p>
                 </div>
-                <span className="rounded-full bg-slate-800 px-2 py-1 text-[10px] font-bold text-cyan-300">{p.best_time_to_bet}</span>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  {onAddToTracker && (
+                    <button
+                      type="button"
+                      disabled={saveLoading}
+                      onClick={() => void onAddToTracker(scenario)}
+                      className="rounded-lg bg-emerald-500/20 px-3 py-1.5 text-[10px] font-bold uppercase text-emerald-300 ring-1 ring-emerald-500/30 hover:bg-emerald-500/30 disabled:opacity-50"
+                    >
+                      Add to tracker
+                    </button>
+                  )}
+                  <span className="rounded-full bg-slate-800 px-2 py-1 text-[10px] font-bold text-cyan-300">{p.best_time_to_bet}</span>
+                </div>
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>

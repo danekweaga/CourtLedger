@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import type { Bet, BetDraft, BetFilters, BetSortKey } from "../types/bets";
 import { createBet, deleteBet, duplicateBet, fetchBets, quickGradeBet, updateBet } from "../lib/betsService";
+import type { BetIntelligenceScenarioInput, IntelligenceReportResult } from "../types/betIntelligence";
+import { intelligenceScenarioToBetDraft } from "../utils/intelligenceScenarioToBetDraft";
 import { upsertLiveStat, updateBetLiveTracking } from "../lib/liveStatsService";
 import { calculateTargetRemaining } from "../utils/progress";
 import { createEmptyBetDraft } from "../utils/betDraft";
@@ -120,6 +122,11 @@ export function useCourtLedgerData(userId: string) {
       units_staked: bet.units_staked,
       game_status: bet.game_status,
       player_active_status: bet.player_active_status,
+      auto_settle_enabled: bet.auto_settle_enabled ?? false,
+      stats_player_id: bet.stats_player_id ?? null,
+      stats_game_id: bet.stats_game_id ?? null,
+      last_auto_settle_at: bet.last_auto_settle_at ?? null,
+      auto_settle_error: bet.auto_settle_error ?? null,
     });
   }
 
@@ -176,6 +183,29 @@ export function useCourtLedgerData(userId: string) {
     }
   }
 
+  async function addBetFromIntelligence(
+    scenario: BetIntelligenceScenarioInput,
+    options?: { source?: "top_picks" | "intelligence_analysis"; report?: IntelligenceReportResult | null },
+  ) {
+    setSaveLoading(true);
+    try {
+      const draft = intelligenceScenarioToBetDraft(scenario, {
+        source: options?.source ?? "intelligence_analysis",
+        report: options?.report ?? null,
+      });
+      const created = await createBet(userId, {
+        ...draft,
+        target_remaining: calculateTargetRemaining(draft.line, draft.current_stat_value, draft.over_under),
+      });
+      setBets((prev) => [created, ...prev]);
+      toast.success("Added to tracker.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not add bet.");
+    } finally {
+      setSaveLoading(false);
+    }
+  }
+
   async function loadSampleData() {
     setSaveLoading(true);
     try {
@@ -219,5 +249,6 @@ export function useCourtLedgerData(userId: string) {
     gradeBet,
     updateLiveStat,
     loadSampleData,
+    addBetFromIntelligence,
   };
 }

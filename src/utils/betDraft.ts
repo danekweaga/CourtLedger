@@ -35,5 +35,10 @@ export function createEmptyBetDraft(): BetDraft {
     units_staked: 1,
     game_status: "Scheduled",
     player_active_status: "Unknown",
+    auto_settle_enabled: false,
+    stats_player_id: null,
+    stats_game_id: null,
+    last_auto_settle_at: null,
+    auto_settle_error: null,
   };
 }

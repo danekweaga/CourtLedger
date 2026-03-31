@@ -43,15 +43,23 @@ export function ActiveBetsSection({
             const status = getHitStateLabel(bet);
             return (
               <article key={bet.id} className="rounded-xl border border-slate-700/20 bg-surface-container p-5">
-                <div className="mb-4 flex items-start justify-between">
-                  <div>
+                <div className="mb-4 flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
                     <h4 className="text-sm font-bold text-white">{bet.player_name || "Team/Game Bet"}</h4>
                     <p className="text-[10px] text-on-surface-variant">
                       {bet.over_under ? `${bet.over_under.toUpperCase()} ` : ""}
                       {bet.line ?? "-"} {bet.market_type.replaceAll("_", " ")} vs {bet.opponent || "-"}
                     </p>
+                    {bet.auto_settle_enabled && (
+                      <p className="mt-1 text-[9px] font-bold uppercase tracking-wide text-cyan-400/90">Auto-settle on</p>
+                    )}
+                    {bet.auto_settle_error ? (
+                      <p className="mt-1 text-[9px] text-amber-300/90" title={bet.auto_settle_error}>
+                        Settle note: {bet.auto_settle_error.length > 80 ? `${bet.auto_settle_error.slice(0, 80)}…` : bet.auto_settle_error}
+                      </p>
+                    ) : null}
                   </div>
-                  <span className="rounded border border-secondary/20 bg-secondary/10 px-2 py-0.5 text-[10px] font-bold text-secondary">LIVE</span>
+                  <span className="shrink-0 rounded border border-secondary/20 bg-secondary/10 px-2 py-0.5 text-[10px] font-bold text-secondary">LIVE</span>
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between text-[11px] font-medium">

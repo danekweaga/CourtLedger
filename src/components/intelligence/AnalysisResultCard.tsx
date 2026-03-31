@@ -2,9 +2,11 @@ import type { IntelligenceReportResult } from "../../types/betIntelligence";
 
 interface AnalysisResultCardProps {
   report: IntelligenceReportResult;
+  saveLoading?: boolean;
+  onAddToTracker?: () => void;
 }
 
-export function AnalysisResultCard({ report }: AnalysisResultCardProps) {
+export function AnalysisResultCard({ report, saveLoading = false, onAddToTracker }: AnalysisResultCardProps) {
   const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 
   return (
@@ -88,6 +90,20 @@ export function AnalysisResultCard({ report }: AnalysisResultCardProps) {
           ))}
         </ul>
       </section>
+
+      {onAddToTracker && (
+        <div className="flex flex-wrap items-center gap-3 border-t border-slate-800 pt-4">
+          <button
+            type="button"
+            disabled={saveLoading}
+            onClick={() => void onAddToTracker()}
+            className="rounded-xl bg-emerald-500/25 px-4 py-2.5 text-sm font-bold text-emerald-200 ring-1 ring-emerald-500/40 hover:bg-emerald-500/35 disabled:opacity-50"
+          >
+            Add to tracker
+          </button>
+          <p className="max-w-md text-xs text-slate-500">Creates a pending bet with auto-settle enabled. Confirm game date and stake on Command Center if needed.</p>
+        </div>
+      )}
 
       <section className="flex flex-wrap gap-6 border-t border-slate-800 pt-4">
         <div>

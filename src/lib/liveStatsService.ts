@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import type { Bet, LiveStatUpdate } from "../types/bets";
+import { normalizeBetRow } from "./betsService";
 import { calculateTargetRemaining } from "../utils/progress";
 
 const LIVE_STATS_TABLE = "live_stats_cache";
@@ -47,5 +48,5 @@ export async function updateBetLiveTracking(id: string, update: LiveStatUpdate):
   if (error) {
     throw error;
   }
-  return data as Bet;
+  return normalizeBetRow(data as Bet);
 }
