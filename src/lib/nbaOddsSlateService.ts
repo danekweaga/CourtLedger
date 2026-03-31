@@ -14,7 +14,38 @@ export interface NbaOddsSlateResponse {
 /** Edge Function can run ~30–60s (odds + many balldontlie lookups); default fetch may feel “stuck” on slow networks. */
 const INVOKE_TIMEOUT_MS = 120_000;
 
-async function describeInvokeFailure(error: unknown): Promise<string> {
+function formatErrorBodyText(status: number, raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return status === 500
+      ? "Empty body — usually missing Edge Function secrets (THE_ODDS_API_KEY, BALLDONTLIE_API_KEY) or a cold-start crash. Check Dashboard → Edge Functions → nba-odds-slate → Logs."
+      : "";
+  }
+  try {
+    const j = JSON.parse(trimmed) as { error?: string; detail?: string; message?: string };
+    const parts = [j.error, j.detail, j.message].filter(Boolean);
+    if (parts.length) {
+      return parts.join(" — ");
+    }
+  } catch {
+    /* not JSON */
+  }
+  return trimmed.slice(0, 400);
+}
+
+async function readResponseDetail(res: Response | null | undefined): Promise<string> {
+  if (!res) {
+    return "";
+  }
+  try {
+    const text = await res.text();
+    return formatErrorBodyText(res.status, text);
+  } catch {
+    return "";
+  }
+}
+
+async function describeInvokeFailure(error: unknown, invokeResponse?: Response | null): Promise<string> {
   if (error instanceof FunctionsFetchError) {
     const ctx = error.context;
     const inner =
@@ -34,23 +65,24 @@ async function describeInvokeFailure(error: unknown): Promise<string> {
   if (error instanceof FunctionsRelayError) {
     return "Supabase could not run the Edge Function (relay error). Redeploy nba-odds-slate or check Dashboard → Edge Functions → Logs.";
   }
-  if (error instanceof FunctionsHttpError) {
-    const res = error.context as Response;
-    let body = "";
-    try {
-      body = (await res.clone().text()).slice(0, 280);
-    } catch {
-      /* ignore */
-    }
+  const httpErr = error instanceof FunctionsHttpError ? error : null;
+  const maybeName = error && typeof error === "object" && "name" in error ? String((error as { name: string }).name) : "";
+  if (httpErr || maybeName === "FunctionsHttpError") {
+    const res = (invokeResponse ?? (httpErr?.context as Response | undefined)) as Response | undefined;
+    const status = res?.status ?? 0;
+    const body = res ? await readResponseDetail(res) : "";
     const hint =
-      res.status === 404
-        ? " (Function missing — run: supabase functions deploy nba-odds-slate)"
-        : res.status === 401
-          ? " (Sign out and sign in again; session must be valid.)"
-          : res.status >= 500
-            ? " (Check function logs; set secrets THE_ODDS_API_KEY and BALLDONTLIE_API_KEY.)"
-            : "";
-    return `Edge Function HTTP ${res.status}${hint}${body ? ` — ${body}` : ""}`;
+      status === 404
+        ? "Deploy: npx supabase functions deploy nba-odds-slate"
+        : status === 401
+          ? "Sign out and sign in again. VITE_SUPABASE_* must be the same project as the function."
+          : status === 502
+            ? "Odds API rejected the request (invalid key, quota, or upstream error). Check THE_ODDS_API_KEY secret."
+            : status >= 500
+              ? "Set secrets THE_ODDS_API_KEY and BALLDONTLIE_API_KEY (Dashboard → Edge Functions → Secrets), then redeploy if needed."
+              : "";
+    const parts = [`HTTP ${status || "?"}`, hint, body].filter(Boolean);
+    return parts.join(" · ");
   }
   if (error instanceof Error) {
     return error.message;
@@ -63,12 +95,12 @@ async function describeInvokeFailure(error: unknown): Promise<string> {
  * Requires deployed function `nba-odds-slate` and secrets THE_ODDS_API_KEY, BALLDONTLIE_API_KEY.
  */
 export async function fetchNbaOddsSlateScenarios(): Promise<NbaOddsSlateResponse> {
-  const { data, error } = await supabase.functions.invoke<NbaOddsSlateResponse>("nba-odds-slate", {
+  const { data, error, response: invokeResponse } = await supabase.functions.invoke<NbaOddsSlateResponse>("nba-odds-slate", {
     body: {},
     timeout: INVOKE_TIMEOUT_MS,
   });
   if (error) {
-    throw new Error(await describeInvokeFailure(error));
+    throw new Error(await describeInvokeFailure(error, invokeResponse ?? null));
   }
   if (!data || typeof data !== "object") {
     throw new Error("Empty response from nba-odds-slate");
