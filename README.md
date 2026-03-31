@@ -117,6 +117,8 @@ Do **not** put these keys in the Vite app or commit them. If a key is ever paste
 
 **Client:** `src/lib/nbaOddsSlateService.ts` invokes the function; **Bet Intelligence** → **Load top 5 from odds**.
 
+**Troubleshooting — toast says it could not reach Edge Functions / “Failed to send a request”:** That is a **browser network** failure (no HTTP response from Supabase). Check `VITE_SUPABASE_URL` in `.env` is exactly `https://<project-ref>.supabase.co`, reload the dev server after edits, try another network or disable ad blockers, and confirm the function is deployed. If you see **HTTP 404** instead, deploy `nba-odds-slate`. If **HTTP 401**, sign out and back in.
+
 ## Manual Live Tracking and Future API Integration
 
 The MVP works with manual live updates from the dashboard. Future provider integration is designed around:
