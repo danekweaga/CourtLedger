@@ -1,4 +1,5 @@
 import type { RefObject } from "react";
+import { NavLink } from "react-router-dom";
 import { BetForm } from "../components/bets/BetForm";
 import { ActiveBetsSection } from "../components/bets/ActiveBetsSection";
 import { SettledBetsSection } from "../components/bets/SettledBetsSection";
@@ -16,6 +17,8 @@ interface CommandCenterPageProps {
     roi: number;
     averageOdds: number;
   };
+  moneySavedFromBetting: number;
+  onMoneySavedFromBettingChange: (value: number) => void;
   filters: BetFilters;
   sort: BetSortKey;
   draft: BetDraft;
@@ -45,6 +48,8 @@ interface CommandCenterPageProps {
 export function CommandCenterPage(props: CommandCenterPageProps) {
   const {
     summary,
+    moneySavedFromBetting,
+    onMoneySavedFromBettingChange,
     filters,
     sort,
     draft,
@@ -73,8 +78,8 @@ export function CommandCenterPage(props: CommandCenterPageProps) {
 
   return (
     <div className="space-y-8">
-      <section className="grid grid-cols-1 gap-6 md:grid-cols-4">
-        <article className="relative overflow-hidden rounded-xl bg-surface-container p-6 md:col-span-2">
+      <section className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-5">
+        <article className="relative overflow-hidden rounded-xl bg-surface-container p-6 lg:col-span-2">
           <div className="absolute left-0 top-0 h-full w-1 bg-primary" />
           <p className="mb-1 text-xs font-medium uppercase tracking-widest text-on-surface-variant">Total Profit</p>
           <h2 className="brand-font text-4xl font-extrabold tracking-tight text-white">{formatSigned(summary.totalProfit)}</h2>
@@ -84,6 +89,29 @@ export function CommandCenterPage(props: CommandCenterPageProps) {
               {summary.roi}% ROI
             </span>
           </div>
+        </article>
+        <article className="rounded-xl border border-secondary/20 bg-surface-container p-6">
+          <p className="mb-1 text-xs font-medium uppercase tracking-widest text-on-surface-variant">Money saved from betting</p>
+          <p className="mt-2 text-[10px] leading-relaxed text-on-surface-variant">
+            Your own number (e.g. what you did not redeposit or chose to set aside). Editable anytime; stored on this device only.
+          </p>
+          <label className="mt-3 block">
+            <span className="sr-only">Amount in dollars</span>
+            <div className="relative mt-1">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-on-surface-variant">$</span>
+              <input
+                type="number"
+                step="0.01"
+                min={0}
+                className="w-full rounded-lg border-none bg-surface-container-lowest py-3 pl-8 pr-3 text-lg font-extrabold text-primary outline-none ring-1 ring-transparent focus:ring-primary/40"
+                value={Number.isFinite(moneySavedFromBetting) ? moneySavedFromBetting : 0}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  onMoneySavedFromBettingChange(Number.isFinite(v) ? v : 0);
+                }}
+              />
+            </div>
+          </label>
         </article>
         <article className="rounded-xl bg-surface-container p-6">
           <p className="mb-1 text-xs font-medium uppercase tracking-widest text-on-surface-variant">Win Rate</p>
@@ -102,6 +130,19 @@ export function CommandCenterPage(props: CommandCenterPageProps) {
             Avg Odds: <span className="font-medium text-white">{summary.averageOdds > 0 ? `+${summary.averageOdds}` : summary.averageOdds}</span>
           </p>
         </article>
+      </section>
+
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-emerald-500/25 bg-surface-container/80 px-5 py-4 ring-1 ring-emerald-500/10">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400/90">Bet Intelligence</p>
+          <p className="mt-1 text-sm text-on-surface-variant">Structured prop analysis, edge score, trap checks — save reports to Supabase.</p>
+        </div>
+        <NavLink
+          to="/intelligence"
+          className="rounded-full bg-emerald-500/15 px-5 py-2.5 text-sm font-bold text-emerald-300 ring-1 ring-emerald-500/30 transition-colors hover:bg-emerald-500/25"
+        >
+          Open Intelligence
+        </NavLink>
       </section>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">

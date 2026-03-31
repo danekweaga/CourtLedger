@@ -1,29 +1,34 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
 interface SettingsPageProps {
   session: Session;
+  moneySavedFromBetting: number;
+  onMoneySavedFromBettingChange: (value: number) => void;
 }
 
-export function SettingsPage({ session }: SettingsPageProps) {
-  const [defaultUnit, setDefaultUnit] = useState("1");
-  const [defaultStake, setDefaultStake] = useState("25");
-  const [showOnlyNba, setShowOnlyNba] = useState(true);
+function readStoredString(key: string, fallback: string): string {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+  return localStorage.getItem(key) ?? fallback;
+}
 
-  useEffect(() => {
-    const storedUnit = localStorage.getItem("courtledger.defaultUnit");
-    const storedStake = localStorage.getItem("courtledger.defaultStake");
-    const storedSport = localStorage.getItem("courtledger.showOnlyNba");
-    if (storedUnit) {
-      setDefaultUnit(storedUnit);
-    }
-    if (storedStake) {
-      setDefaultStake(storedStake);
-    }
-    if (storedSport) {
-      setShowOnlyNba(storedSport === "true");
-    }
-  }, []);
+function readStoredBool(key: string, fallback: boolean): boolean {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+  const raw = localStorage.getItem(key);
+  if (raw === null) {
+    return fallback;
+  }
+  return raw === "true";
+}
+
+export function SettingsPage({ session, moneySavedFromBetting, onMoneySavedFromBettingChange }: SettingsPageProps) {
+  const [defaultUnit, setDefaultUnit] = useState(() => readStoredString("courtledger.defaultUnit", "1"));
+  const [defaultStake, setDefaultStake] = useState(() => readStoredString("courtledger.defaultStake", "25"));
+  const [showOnlyNba, setShowOnlyNba] = useState(() => readStoredBool("courtledger.showOnlyNba", true));
 
   function savePreferences() {
     localStorage.setItem("courtledger.defaultUnit", defaultUnit);
@@ -45,6 +50,27 @@ export function SettingsPage({ session }: SettingsPageProps) {
             <p className="mt-1 break-all text-sm text-on-surface">{session.user.id}</p>
           </div>
         </div>
+      </section>
+
+      <section className="rounded-xl border border-outline-variant/20 bg-surface-container p-6">
+        <h3 className="font-headline text-xl font-bold">Money saved from betting</h3>
+        <p className="mt-1 text-sm text-on-surface-variant">
+          Track any amount you consider &quot;saved&quot; (not from auto-calculated profit). Updates Command Center and is saved in your browser.
+        </p>
+        <label className="mt-4 block space-y-1">
+          <span className="text-xs uppercase tracking-wider text-on-surface-variant">Amount ($)</span>
+          <input
+            type="number"
+            step="0.01"
+            min={0}
+            value={Number.isFinite(moneySavedFromBetting) ? moneySavedFromBetting : 0}
+            onChange={(event) => {
+              const v = parseFloat(event.target.value);
+              onMoneySavedFromBettingChange(Number.isFinite(v) ? v : 0);
+            }}
+            className="w-full max-w-xs rounded-lg border-none bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ring-1 ring-transparent focus:ring-primary/40"
+          />
+        </label>
       </section>
 
       <section className="rounded-xl border border-outline-variant/20 bg-surface-container p-6">

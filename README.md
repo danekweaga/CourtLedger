@@ -44,6 +44,18 @@ The app is wired to these existing tables:
 
 It expects RLS policies to allow each authenticated user to access only their own rows (`user_id`-scoped).
 
+### Bet Intelligence (`bet_intelligence_reports`)
+
+Run the migration in Supabase: open **SQL** → **New query**, paste the full file, **Run** (or use `supabase db push` if the repo is linked):
+
+- `supabase/migrations/20260330120000_bet_intelligence_reports.sql`
+
+Policies are idempotent (dropped before recreate). Command Center includes an **Open Intelligence** shortcut to `/intelligence`.
+
+This creates the table, RLS, indexes, and `updated_at` trigger. The app route is **`/intelligence`** (sidebar: **Bet Intelligence**).
+
+**Code map:** types `src/types/betIntelligence.ts`; engine `src/lib/betIntelligenceEngine.ts` plus `projectionEngine`, `lineMovement`, `edgeScoring`, `simulationEngine`, `riskAssessment`; Supabase `src/lib/betIntelligenceService.ts`; hook `src/hooks/useIntelligenceReports.ts`; UI `src/components/intelligence/*` and page `src/pages/BetIntelligencePage.tsx`. Future feeds: `src/lib/intelligenceDataProvider.ts`. Sample slate rows: `src/data/sampleBetIntelligence.ts`.
+
 ## Manual Live Tracking and Future API Integration
 
 The MVP works with manual live updates from the dashboard. Future provider integration is designed around:

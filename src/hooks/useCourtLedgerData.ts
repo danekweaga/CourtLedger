@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
 import type { Bet, BetDraft, BetFilters, BetSortKey } from "../types/bets";
 import { createBet, deleteBet, duplicateBet, fetchBets, quickGradeBet, updateBet } from "../lib/betsService";
@@ -7,6 +7,7 @@ import { calculateTargetRemaining } from "../utils/progress";
 import { createEmptyBetDraft } from "../utils/betDraft";
 import { applyFiltersAndSort } from "../utils/betFiltering";
 import { computeSummaryStats } from "../utils/analytics";
+import { readMoneySavedFromBetting, writeMoneySavedFromBetting } from "../utils/moneySavedStorage";
 import { sampleBets } from "../data/mockBets";
 
 export function useCourtLedgerData(userId: string) {
@@ -38,6 +39,13 @@ export function useCourtLedgerData(userId: string) {
   const activeBets = useMemo(() => filteredBets.filter((bet) => bet.result_status === "pending"), [filteredBets]);
   const settledBets = useMemo(() => filteredBets.filter((bet) => bet.result_status !== "pending"), [filteredBets]);
   const summary = useMemo(() => computeSummaryStats(bets), [bets]);
+
+  const [moneySavedFromBetting, setMoneySavedState] = useState(readMoneySavedFromBetting);
+  const setMoneySavedFromBetting = useCallback((value: number) => {
+    const n = Number.isFinite(value) ? Number(value.toFixed(2)) : 0;
+    setMoneySavedState(n);
+    writeMoneySavedFromBetting(n);
+  }, []);
 
   async function loadBets() {
     setLoadingBets(true);
@@ -189,6 +197,8 @@ export function useCourtLedgerData(userId: string) {
     activeBets,
     settledBets,
     summary,
+    moneySavedFromBetting,
+    setMoneySavedFromBetting,
     loadingBets,
     saveLoading,
     editingBet,

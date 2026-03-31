@@ -13,6 +13,7 @@ import { MarketIntelligencePage } from "./pages/MarketIntelligencePage";
 import { BetHistoryPage } from "./pages/BetHistoryPage";
 import { LiveCenterPage } from "./pages/LiveCenterPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { BetIntelligencePage } from "./pages/BetIntelligencePage";
 import { signOut } from "./lib/auth";
 
 function App() {
@@ -45,6 +46,9 @@ function CourtLedgerApp({ session }: { session: Session }) {
     }
     if (location.pathname === "/settings") {
       return { title: "Settings", subtitle: "Account and preferences", active: "settings" as const };
+    }
+    if (location.pathname === "/intelligence") {
+      return { title: "Bet Intelligence", subtitle: "Structured prop analysis and slate scan", active: "intelligence" as const };
     }
     return { title: "Command Center", subtitle: "Live tracking and execution dashboard", active: "command" as const };
   }, [location.pathname]);
@@ -84,6 +88,8 @@ function CourtLedgerApp({ session }: { session: Session }) {
           element={
             <CommandCenterPage
               summary={data.summary}
+              moneySavedFromBetting={data.moneySavedFromBetting}
+              onMoneySavedFromBettingChange={data.setMoneySavedFromBetting}
               filters={data.filters}
               sort={data.sort}
               draft={data.draft}
@@ -115,6 +121,7 @@ function CourtLedgerApp({ session }: { session: Session }) {
           }
         />
         <Route path="/analytics" element={<AnalyticsPage bets={data.bets} />} />
+        <Route path="/intelligence" element={<BetIntelligencePage userId={session.user.id} bets={data.bets} />} />
         <Route path="/markets" element={<MarketIntelligencePage bets={data.bets} />} />
         <Route
           path="/live"
@@ -139,7 +146,16 @@ function CourtLedgerApp({ session }: { session: Session }) {
             />
           }
         />
-        <Route path="/settings" element={<SettingsPage session={session} />} />
+        <Route
+          path="/settings"
+          element={
+            <SettingsPage
+              session={session}
+              moneySavedFromBetting={data.moneySavedFromBetting}
+              onMoneySavedFromBettingChange={data.setMoneySavedFromBetting}
+            />
+          }
+        />
       </Routes>
     </AppFrame>
   );
