@@ -132,6 +132,8 @@ Do **not** put these keys in the Vite app or commit them. If a key is ever paste
 
 **Troubleshooting — toast says it could not reach Edge Functions / “Failed to send a request”:** That is a **browser network** failure (no HTTP response from Supabase). Check `VITE_SUPABASE_URL` in `.env` is exactly `https://<project-ref>.supabase.co`, reload the dev server after edits, try another network or disable ad blockers, and confirm the function is deployed. If you see **HTTP 404** instead, deploy `nba-odds-slate`. If **HTTP 401**, sign out and back in.
 
+**“Edge Function returned a non-2xx status code”:** The request reached Supabase; the function responded with an error. After updating the app, the toast should show **HTTP code + a short reason**. Typical fixes: **401** — sign in again; same Supabase project in `.env` as where you deployed. **500** — set secrets `THE_ODDS_API_KEY` and `BALLDONTLIE_API_KEY` (Dashboard → Edge Functions → Secrets). **502** — Odds API key or quota issue. Check **Edge Functions → nba-odds-slate → Logs** for the full stack trace.
+
 ## Manual Live Tracking and Future API Integration
 
 The MVP works with manual live updates from the dashboard. Future provider integration is designed around:
