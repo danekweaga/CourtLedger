@@ -71,11 +71,15 @@ async function describeInvokeFailure(error: unknown, invokeResponse?: Response |
     const res = (invokeResponse ?? (httpErr?.context as Response | undefined)) as Response | undefined;
     const status = res?.status ?? 0;
     const body = res ? await readResponseDetail(res) : "";
+    const invalidJwt = /invalid\s+jwt/i.test(body);
+    const hint401 = invalidJwt
+      ? "Invalid JWT usually means tokens are for a different Supabase project than your .env: sign out, clear site data (or localStorage keys starting with sb-), fix VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY from the same Dashboard → Settings → API, restart npm run dev, sign in again."
+      : "Sign out and sign in again. VITE_SUPABASE_* must match the project where nba-odds-slate is deployed.";
     const hint =
       status === 404
         ? "Function not found (404). Almost always: VITE_SUPABASE_URL is a different Supabase project than where you deployed. The ref in https://YOUR_REF.supabase.co must match Dashboard → Edge Functions (where nba-odds-slate appears). Fix .env, restart npm run dev. If it is still missing on that project: npx supabase functions deploy nba-odds-slate"
         : status === 401
-          ? "Sign out and sign in again. VITE_SUPABASE_* must be the same project as the function."
+          ? hint401
           : status === 502
             ? "Odds API rejected the request (invalid key, quota, or upstream error). Check THE_ODDS_API_KEY secret."
             : status >= 500
@@ -94,10 +98,33 @@ async function describeInvokeFailure(error: unknown, invokeResponse?: Response |
  * One Edge Function call → one Odds API request (3 player markets × US) + sparse balldontlie lookups.
  * Requires deployed function `nba-odds-slate` and secrets THE_ODDS_API_KEY, BALLDONTLIE_API_KEY.
  */
+const REFRESH_IF_EXPIRES_WITHIN_SEC = 600;
+
 export async function fetchNbaOddsSlateScenarios(): Promise<NbaOddsSlateResponse> {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) {
+    throw new Error(`Session error: ${sessionError.message}`);
+  }
+  if (!sessionData.session) {
+    throw new Error("You must be signed in to load odds. Sign in and try again.");
+  }
+
+  let accessToken = sessionData.session.access_token;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const exp = sessionData.session.expires_at ?? 0;
+  if (!exp || exp - nowSec < REFRESH_IF_EXPIRES_WITHIN_SEC) {
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    if (!refreshError && refreshed.session) {
+      accessToken = refreshed.session.access_token;
+    }
+  }
+
   const { data, error, response: invokeResponse } = await supabase.functions.invoke<NbaOddsSlateResponse>("nba-odds-slate", {
     body: {},
     timeout: INVOKE_TIMEOUT_MS,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
   if (error) {
     throw new Error(await describeInvokeFailure(error, invokeResponse ?? null));

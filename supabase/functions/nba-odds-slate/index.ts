@@ -136,9 +136,14 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: "Set Edge Function secret BALLDONTLIE_API_KEY" }), { status: 500 });
   }
 
+  const jsonHeaders = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+  };
+
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+    return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), { status: 401, headers: jsonHeaders });
   }
 
   const supabase = createClient(supabaseUrl, anonKey, {
@@ -146,7 +151,8 @@ Deno.serve(async (req) => {
   });
   const { data: userData, error: userErr } = await supabase.auth.getUser();
   if (userErr || !userData.user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+    const msg = userErr?.message ?? "Unauthorized";
+    return new Response(JSON.stringify({ error: msg }), { status: 401, headers: jsonHeaders });
   }
 
   const oddsUrl =
