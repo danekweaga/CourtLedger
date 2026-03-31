@@ -2,6 +2,7 @@ import type { FormEvent } from "react";
 import { BET_CATEGORIES, LIVE_STATUSES, NBA_MARKETS, RESULT_STATUSES } from "../../constants/markets";
 import type { Bet, BetDraft } from "../../types/bets";
 import { computePotentialPayout } from "../../utils/profit";
+import { BetSlipScanner } from "./BetSlipScanner";
 
 interface BetFormProps {
   editingBet: Bet | null;
@@ -35,6 +36,7 @@ export function BetForm({ editingBet, draft, onChange, onSubmit, onCancelEdit, l
         <span className="material-symbols-outlined text-primary">add_circle</span>
         {editingBet ? "Edit Position" : "Log New Position"}
       </h3>
+      {!editingBet && <BetSlipScanner draft={draft} onApplyPatch={onChange} disabled={loading} />}
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div className="space-y-1.5">
           <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Market Type</label>
