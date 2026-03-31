@@ -52,6 +52,18 @@ class OddsSlateError extends Error {
 }
 
 const INVOKE_TIMEOUT_MS = 120_000;
+const AUTH_TOKEN_INVALID_EVENT = "courtledger:auth-token-invalid";
+
+function notifyAuthTokenInvalid(message: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.dispatchEvent(
+    new CustomEvent(AUTH_TOKEN_INVALID_EVENT, {
+      detail: { message },
+    }),
+  );
+}
 
 function extractHttpResponse(error: unknown, invokeResponse?: Response | null): Response | null {
   if (invokeResponse) {
@@ -181,10 +193,11 @@ function classifyInvokeFailure(args: { error: unknown; status: number; bodyText:
   return new OddsSlateError("UnknownInvokeError", String(error), status, false, bodyText || null);
 }
 
-async function invokeNbaOddsSlate() {
+async function invokeNbaOddsSlate(accessToken: string) {
   return supabase.functions.invoke<NbaOddsSlateResponse>("nba-odds-slate", {
     body: {},
     timeout: INVOKE_TIMEOUT_MS,
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 }
 
@@ -217,10 +230,34 @@ export async function fetchNbaOddsSlateScenarios(): Promise<NbaOddsSlateResponse
     throw new OddsSlateError("AuthSessionMissing", "You must be signed in to load odds. Sign in and try again.", 401);
   }
 
+  async function validateTokenOrRefresh(token: string): Promise<string> {
+    const { data: userData, error: userError } = await supabase.auth.getUser(token);
+    if (!userError && userData.user) {
+      return token;
+    }
+
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError || !refreshed.session?.access_token) {
+      const msg = "Session refresh failed. Sign in again and retry.";
+      notifyAuthTokenInvalid(msg);
+      throw new OddsSlateError("AuthTokenInvalid", msg, 401, false, refreshError?.message ?? userError?.message ?? null);
+    }
+
+    const refreshedToken = refreshed.session.access_token;
+    const { data: refreshedUser, error: refreshedUserError } = await supabase.auth.getUser(refreshedToken);
+    if (refreshedUserError || !refreshedUser.user) {
+      const msg = "Session refresh did not yield a usable auth token. Sign in again and retry.";
+      notifyAuthTokenInvalid(msg);
+      throw new OddsSlateError("AuthTokenInvalid", msg, 401, false, refreshedUserError?.message ?? null);
+    }
+    return refreshedToken;
+  }
+
+  let token = await validateTokenOrRefresh(currentSession.access_token);
   let triedRefresh = false;
 
   for (;;) {
-    const { data, error, response } = await invokeNbaOddsSlate();
+    const { data, error, response } = await invokeNbaOddsSlate(token);
     if (!error) {
       return normalizeResponse(data);
     }
@@ -231,31 +268,13 @@ export async function fetchNbaOddsSlateScenarios(): Promise<NbaOddsSlateResponse
 
     if (mapped.code === "AuthTokenInvalid" && !triedRefresh) {
       triedRefresh = true;
-      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-      if (refreshError || !refreshed.session?.access_token) {
-        throw new OddsSlateError(
-          "AuthSessionMissing",
-          "Session refresh failed. Sign in again and retry.",
-          401,
-          false,
-          refreshError?.message ?? null,
-        );
-      }
-
-      const { error: userError } = await supabase.auth.getUser();
-      if (userError) {
-        throw new OddsSlateError(
-          "AuthSessionMissing",
-          "Session refresh did not yield a usable auth token. Sign in again and retry.",
-          401,
-          false,
-          userError.message,
-        );
-      }
-
+      token = await validateTokenOrRefresh(token);
       continue;
     }
 
+    if (mapped.code === "AuthTokenInvalid") {
+      notifyAuthTokenInvalid(mapped.message);
+    }
     if (mapped.details) {
       throw new Error(`${mapped.message} · ${mapped.details}`);
     }

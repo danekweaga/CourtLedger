@@ -2,12 +2,16 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import toast from "react-hot-toast";
 import { getSession, onAuthStateChange, signIn, signUp } from "../../lib/auth";
+import { supabase } from "../../lib/supabase";
 import { AuthForm } from "./AuthForm";
 import { PublicHome } from "./PublicHome";
 
 interface AuthGateProps {
   children: (session: Session) => ReactNode;
 }
+
+const AUTH_TOKEN_INVALID_EVENT = "courtledger:auth-token-invalid";
+const AUTH_TOKEN_INVALID_RESET_KEY = "courtledger-auth-token-reset-once";
 
 export function AuthGate({ children }: AuthGateProps) {
   const [session, setSession] = useState<Session | null>(null);
@@ -30,6 +34,9 @@ export function AuthGate({ children }: AuthGateProps) {
       });
 
     const { data } = onAuthStateChange((event, nextSession) => {
+      if (event === "SIGNED_IN" && typeof window !== "undefined") {
+        window.sessionStorage.removeItem(AUTH_TOKEN_INVALID_RESET_KEY);
+      }
       if (event === "SIGNED_OUT" && !nextSession) {
         // Guard against transient signed-out events during token refresh races.
         void getSession()
@@ -52,6 +59,26 @@ export function AuthGate({ children }: AuthGateProps) {
     return () => {
       mounted = false;
       data.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const handleAuthInvalid = () => {
+      if (window.sessionStorage.getItem(AUTH_TOKEN_INVALID_RESET_KEY) === "1") {
+        return;
+      }
+      window.sessionStorage.setItem(AUTH_TOKEN_INVALID_RESET_KEY, "1");
+      void supabase.auth.signOut({ scope: "local" }).finally(() => {
+        setSession(null);
+        toast.error("Session reset due to stale auth token. Please sign in again.");
+      });
+    };
+    window.addEventListener(AUTH_TOKEN_INVALID_EVENT, handleAuthInvalid as EventListener);
+    return () => {
+      window.removeEventListener(AUTH_TOKEN_INVALID_EVENT, handleAuthInvalid as EventListener);
     };
   }, []);
 
