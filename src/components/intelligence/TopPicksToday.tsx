@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import toast from "react-hot-toast";
 import type { BetIntelligenceScenarioInput } from "../../types/betIntelligence";
 import { buildTopPicksTodayWithScenarios, summarizeSlate } from "../../lib/betIntelligenceEngine";
+import { fetchNbaOddsSlateScenarios } from "../../lib/nbaOddsSlateService";
 import { sampleBetIntelligenceScenarios } from "../../data/sampleBetIntelligence";
 import { emptyIntelligenceScenario } from "../../utils/intelligenceForm";
 
@@ -9,8 +11,22 @@ interface TopPicksTodayProps {
   onAddToTracker?: (scenario: BetIntelligenceScenarioInput) => Promise<void>;
 }
 
+const ODDS_LOAD_COOLDOWN_MS = 90_000;
+
 export function TopPicksToday({ saveLoading = false, onAddToTracker }: TopPicksTodayProps) {
   const [rows, setRows] = useState<BetIntelligenceScenarioInput[]>(() => [emptyIntelligenceScenario(), emptyIntelligenceScenario()]);
+  const [oddsLoading, setOddsLoading] = useState(false);
+  const [oddsCooldownUntil, setOddsCooldownUntil] = useState(0);
+  const [, setOddsRepaint] = useState(0);
+  useEffect(() => {
+    if (Date.now() >= oddsCooldownUntil) {
+      return;
+    }
+    const id = setInterval(() => {
+      setOddsRepaint((n) => n + 1);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [oddsCooldownUntil]);
 
   const picksWithScenarios = useMemo(
     () => buildTopPicksTodayWithScenarios(rows.filter((r) => r.player_name.trim() && r.team.trim())),
@@ -35,17 +51,52 @@ export function TopPicksToday({ saveLoading = false, onAddToTracker }: TopPicksT
     setRows(sampleBetIntelligenceScenarios.map((s) => ({ ...s })));
   }
 
+  async function loadTopFromOddsApi() {
+    if (oddsLoading || Date.now() < oddsCooldownUntil) {
+      return;
+    }
+    setOddsLoading(true);
+    try {
+      const out = await fetchNbaOddsSlateScenarios();
+      if (out.scenarios.length === 0) {
+        toast.error("No player props returned (off-season, API limits, or books not listing those markets).");
+        return;
+      }
+      setRows(out.scenarios);
+      const rem = out.odds_requests_remaining;
+      toast.success(
+        `Loaded ${out.scenarios.length} high implied-prob lines${rem != null ? ` · Odds API credits left: ${rem}` : ""}.`,
+      );
+      toast(out.disclaimer, { duration: 7000 });
+      setOddsCooldownUntil(Date.now() + ODDS_LOAD_COOLDOWN_MS);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not load odds slate.");
+    } finally {
+      setOddsLoading(false);
+    }
+  }
+
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-400/90">Top Picks Today</p>
-          <h3 className="font-headline text-lg font-bold text-white">Slate scanner (manual)</h3>
+          <h3 className="font-headline text-lg font-bold text-white">Slate scanner</h3>
           <p className="mt-1 max-w-xl text-xs text-slate-500">
-            Enter 2–8 rough scenarios. We only surface 3–5 if edge clears the bar — never forced picks.
+            Enter scenarios manually, load demos, or pull up to <span className="font-bold text-slate-300">5 board lines</span> ranked by
+            devigged implied probability (points / rebounds / assists only). Uses one Odds API request per click — 90s cooldown to protect free
+            tiers. Not betting advice.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={oddsLoading || Date.now() < oddsCooldownUntil}
+            onClick={() => void loadTopFromOddsApi()}
+            className="rounded-lg bg-cyan-500/20 px-3 py-2 text-xs font-bold text-cyan-200 ring-1 ring-cyan-500/35 hover:bg-cyan-500/30 disabled:opacity-50"
+          >
+            {oddsLoading ? "Loading odds…" : Date.now() < oddsCooldownUntil ? "Odds cooldown…" : "Load top 5 from odds"}
+          </button>
           <button type="button" onClick={loadSamples} className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300">
             Load samples
           </button>

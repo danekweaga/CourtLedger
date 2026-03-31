@@ -96,6 +96,27 @@ curl -X POST "https://<project-ref>.supabase.co/functions/v1/sync-bet-settlement
 
 **Shared logic:** `src/utils/propSettlement.ts` mirrors the Edge Function grading rules; keep them aligned if you change one.
 
+### Edge Function `nba-odds-slate` (Bet Intelligence → Load top 5 from odds)
+
+Fills the **Top Picks** slate with up to **5** NBA player props (points, rebounds, assists) ranked by **devigged implied probability** on the favorite side of each line (median prices across US books returned by The Odds API). This is **not** a win guarantee—only “what the board prices imply.”
+
+**Deploy** (keep JWT verification enabled so only signed-in users can call it):
+
+```bash
+supabase functions deploy nba-odds-slate
+```
+
+**Secrets** (Dashboard → Edge Functions → Secrets, or CLI):
+
+- `THE_ODDS_API_KEY` — [The Odds API](https://the-odds-api.com/) key (query parameter on their requests).
+- `BALLDONTLIE_API_KEY` — [balldontlie](https://www.balldontlie.io/) key (`Authorization` header).
+
+Do **not** put these keys in the Vite app or commit them. If a key is ever pasted into chat or checked into git, **rotate it** at the provider.
+
+**Cost discipline:** One button click uses **one** Odds API request (`player_points`, `player_rebounds`, `player_assists`, `regions=us`) plus a small number of balldontlie calls (teams + player search per candidate). The UI enforces a **90 second** cooldown between loads.
+
+**Client:** `src/lib/nbaOddsSlateService.ts` invokes the function; **Bet Intelligence** → **Load top 5 from odds**.
+
 ## Manual Live Tracking and Future API Integration
 
 The MVP works with manual live updates from the dashboard. Future provider integration is designed around:
