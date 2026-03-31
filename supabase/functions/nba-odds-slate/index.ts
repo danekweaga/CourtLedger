@@ -107,6 +107,44 @@ function abbrFromEventTeam(eventTeamName: string, teams: BdlTeam[]): string {
   return byNick?.abbreviation ?? eventTeamName.slice(0, 3).toUpperCase();
 }
 
+function projectRefFromUrl(url: string | null | undefined): string | null {
+  if (!url) {
+    return null;
+  }
+  try {
+    const host = new URL(url).hostname;
+    const [subdomain] = host.split(".");
+    return subdomain ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function refFromBearer(authHeader: string): string | null {
+  try {
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const payloadB64 = token.split(".")[1];
+    if (!payloadB64) {
+      return null;
+    }
+    const normalized = payloadB64.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded)) as { ref?: string };
+    return typeof payload.ref === "string" ? payload.ref : null;
+  } catch {
+    return null;
+  }
+}
+
+function unauthorized(
+  headers: Record<string, string>,
+  code: string,
+  message: string,
+  meta?: Record<string, unknown>,
+): Response {
+  return new Response(JSON.stringify({ code, message, meta: meta ?? null }), { status: 401, headers });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -143,7 +181,18 @@ Deno.serve(async (req) => {
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Missing or invalid Authorization header" }), { status: 401, headers: jsonHeaders });
+    return unauthorized(jsonHeaders, "EDGE_AUTH_HEADER_INVALID", "Missing or invalid Authorization header.");
+  }
+
+  const urlRef = projectRefFromUrl(supabaseUrl);
+  const tokenRef = refFromBearer(authHeader);
+  if (urlRef && tokenRef && urlRef !== tokenRef) {
+    return unauthorized(
+      jsonHeaders,
+      "EDGE_TOKEN_REF_MISMATCH",
+      "Bearer token project does not match this function project.",
+      { token_ref: tokenRef, url_ref: urlRef },
+    );
   }
 
   const supabase = createClient(supabaseUrl, anonKey, {
@@ -151,8 +200,12 @@ Deno.serve(async (req) => {
   });
   const { data: userData, error: userErr } = await supabase.auth.getUser();
   if (userErr || !userData.user) {
-    const msg = userErr?.message ?? "Unauthorized";
-    return new Response(JSON.stringify({ error: msg }), { status: 401, headers: jsonHeaders });
+    return unauthorized(
+      jsonHeaders,
+      "EDGE_GET_USER_FAILED",
+      userErr?.message ?? "Unauthorized",
+      { token_ref: tokenRef ?? "unknown", url_ref: urlRef ?? "unknown" },
+    );
   }
 
   const oddsUrl =

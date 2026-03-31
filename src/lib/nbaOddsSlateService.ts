@@ -11,182 +11,189 @@ export interface NbaOddsSlateResponse {
   disclaimer: string;
 }
 
-/** Edge Function can run ~30–60s (odds + many balldontlie lookups); default fetch may feel “stuck” on slow networks. */
+type OddsSlateErrorCode =
+  | "AuthSessionMissing"
+  | "AuthTokenInvalid"
+  | "FunctionUnauthorized"
+  | "FunctionNotFound"
+  | "UpstreamProviderError"
+  | "FunctionUnavailable"
+  | "NetworkError"
+  | "UnknownInvokeError";
+
+type StructuredEdgeError = {
+  code?: string;
+  message?: string;
+  meta?: Record<string, unknown>;
+  error?: string;
+  detail?: string;
+};
+
+class OddsSlateError extends Error {
+  readonly code: OddsSlateErrorCode;
+  readonly status: number;
+  readonly retryable: boolean;
+  readonly details: string | null;
+
+  constructor(
+    code: OddsSlateErrorCode,
+    message: string,
+    status: number,
+    retryable = false,
+    details: string | null = null,
+  ) {
+    super(message);
+    this.name = "OddsSlateError";
+    this.code = code;
+    this.status = status;
+    this.retryable = retryable;
+    this.details = details;
+  }
+}
+
 const INVOKE_TIMEOUT_MS = 120_000;
-
-function formatErrorBodyText(status: number, raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return status === 500
-      ? "Empty body — usually missing Edge Function secrets (THE_ODDS_API_KEY, BALLDONTLIE_API_KEY) or a cold-start crash. Check Dashboard → Edge Functions → nba-odds-slate → Logs."
-      : "";
-  }
-  try {
-    const j = JSON.parse(trimmed) as { error?: string; detail?: string; message?: string };
-    const parts = [j.error, j.detail, j.message].filter(Boolean);
-    if (parts.length) {
-      return parts.join(" — ");
-    }
-  } catch {
-    /* not JSON */
-  }
-  return trimmed.slice(0, 400);
-}
-
-async function readResponseDetail(res: Response | null | undefined): Promise<string> {
-  if (!res) {
-    return "";
-  }
-  try {
-    const text = await res.text();
-    return formatErrorBodyText(res.status, text);
-  } catch {
-    return "";
-  }
-}
-
-async function describeInvokeFailure(error: unknown, invokeResponse?: Response | null): Promise<string> {
-  if (error instanceof FunctionsFetchError) {
-    const ctx = error.context;
-    const inner =
-      ctx instanceof Error
-        ? ctx.message
-        : ctx && typeof ctx === "object" && "message" in ctx
-          ? String((ctx as { message?: string }).message)
-          : "";
-    return [
-      "Could not reach Supabase Edge Functions (network error before any response).",
-      inner ? `Browser reported: ${inner}` : null,
-      "Fix: confirm VITE_SUPABASE_URL is https://YOUR-PROJECT.supabase.co (no typo), disable ad blockers for this site, and deploy: supabase functions deploy nba-odds-slate",
-    ]
-      .filter(Boolean)
-      .join(" ");
-  }
-  if (error instanceof FunctionsRelayError) {
-    return "Supabase could not run the Edge Function (relay error). Redeploy nba-odds-slate or check Dashboard → Edge Functions → Logs.";
-  }
-  const httpErr = error instanceof FunctionsHttpError ? error : null;
-  const maybeName = error && typeof error === "object" && "name" in error ? String((error as { name: string }).name) : "";
-  if (httpErr || maybeName === "FunctionsHttpError") {
-    const res = (invokeResponse ?? (httpErr?.context as Response | undefined)) as Response | undefined;
-    const status = res?.status ?? 0;
-    const body = res ? await readResponseDetail(res) : "";
-    const invalidJwt = /invalid\s+jwt/i.test(body);
-    const hint401 = invalidJwt
-      ? "Invalid JWT usually means tokens are for a different Supabase project than your .env: sign out, clear site data (or localStorage keys starting with sb-), fix VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY from the same Dashboard → Settings → API, restart npm run dev, sign in again."
-      : "Sign out and sign in again. VITE_SUPABASE_* must match the project where nba-odds-slate is deployed.";
-    const hint =
-      status === 404
-        ? "Function not found (404). Almost always: VITE_SUPABASE_URL is a different Supabase project than where you deployed. The ref in https://YOUR_REF.supabase.co must match Dashboard → Edge Functions (where nba-odds-slate appears). Fix .env, restart npm run dev. If it is still missing on that project: npx supabase functions deploy nba-odds-slate"
-        : status === 401
-          ? hint401
-          : status === 502
-            ? "Odds API rejected the request (invalid key, quota, or upstream error). Check THE_ODDS_API_KEY secret."
-            : status >= 500
-              ? "Set secrets THE_ODDS_API_KEY and BALLDONTLIE_API_KEY (Dashboard → Edge Functions → Secrets), then redeploy if needed."
-              : "";
-    const parts = [`HTTP ${status || "?"}`, hint, body].filter(Boolean);
-    return parts.join(" · ");
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
-}
-
-/**
- * One Edge Function call → one Odds API request (3 player markets × US) + sparse balldontlie lookups.
- * Requires deployed function `nba-odds-slate` and secrets THE_ODDS_API_KEY, BALLDONTLIE_API_KEY.
- */
-const REFRESH_IF_EXPIRES_WITHIN_SEC = 600;
-const INVALID_JWT_NOTICE_KEY = "nbaOddsSlateInvalidJwtNoticeShown";
 
 function extractHttpResponse(error: unknown, invokeResponse?: Response | null): Response | null {
   if (invokeResponse) {
     return invokeResponse;
   }
   if (error && typeof error === "object" && "context" in error) {
-    const maybeContext = (error as { context?: unknown }).context;
-    if (maybeContext instanceof Response) {
-      return maybeContext;
+    const ctx = (error as { context?: unknown }).context;
+    if (ctx instanceof Response) {
+      return ctx;
     }
   }
   return null;
+}
+
+function toBodyText(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return "";
+  }
+  try {
+    const json = JSON.parse(trimmed) as StructuredEdgeError;
+    const parts = [json.code, json.message, json.error, json.detail].filter(Boolean);
+    if (parts.length > 0) {
+      return parts.join(" · ");
+    }
+  } catch {
+    // non-json body
+  }
+  return trimmed.slice(0, 400);
+}
+
+async function readResponseBody(res: Response | null): Promise<{ status: number; text: string; parsed: StructuredEdgeError | null }> {
+  if (!res) {
+    return { status: 0, text: "", parsed: null };
+  }
+  try {
+    const text = await res.text();
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return { status: res.status, text: "", parsed: null };
+    }
+    try {
+      return { status: res.status, text: toBodyText(trimmed), parsed: JSON.parse(trimmed) as StructuredEdgeError };
+    } catch {
+      return { status: res.status, text: toBodyText(trimmed), parsed: null };
+    }
+  } catch {
+    return { status: res.status, text: "", parsed: null };
+  }
+}
+
+function classifyInvokeFailure(args: { error: unknown; status: number; bodyText: string; parsed: StructuredEdgeError | null }): OddsSlateError {
+  const { error, status, bodyText, parsed } = args;
+  if (error instanceof FunctionsFetchError) {
+    return new OddsSlateError(
+      "NetworkError",
+      "Could not reach Supabase Edge Functions (network error before any response). Check connectivity/ad blockers and verify VITE_SUPABASE_URL.",
+      0,
+      true,
+      bodyText || null,
+    );
+  }
+  if (error instanceof FunctionsRelayError) {
+    return new OddsSlateError(
+      "FunctionUnavailable",
+      "Supabase relay could not run nba-odds-slate. Redeploy the function or check Edge Function logs.",
+      0,
+      true,
+      bodyText || null,
+    );
+  }
+  const edgeCode = parsed?.code ?? "";
+  const invalidJwt = /invalid\s+jwt/i.test(bodyText) || edgeCode.includes("TOKEN_REF_MISMATCH");
+  if (status === 401 && invalidJwt) {
+    return new OddsSlateError(
+      "AuthTokenInvalid",
+      `Invalid auth token for Edge Functions. Sign out and sign in again. If it persists, verify Supabase project alignment (${getSupabaseRefDiagnostic()}).`,
+      401,
+      true,
+      bodyText || null,
+    );
+  }
+  if (status === 401) {
+    return new OddsSlateError(
+      "FunctionUnauthorized",
+      "Unauthorized call to nba-odds-slate. Ensure the user is signed in and function auth is configured correctly.",
+      401,
+      false,
+      bodyText || null,
+    );
+  }
+  if (status === 404) {
+    return new OddsSlateError(
+      "FunctionNotFound",
+      "Function not found (404). Ensure `nba-odds-slate` is deployed to the same Supabase project as your frontend URL.",
+      404,
+      false,
+      bodyText || null,
+    );
+  }
+  if (status === 502) {
+    return new OddsSlateError(
+      "UpstreamProviderError",
+      "Odds provider request failed (502). Check THE_ODDS_API_KEY quota/validity and function logs.",
+      502,
+      true,
+      bodyText || null,
+    );
+  }
+  if (status >= 500) {
+    return new OddsSlateError(
+      "FunctionUnavailable",
+      "Edge function failed (5xx). Check THE_ODDS_API_KEY/BALLDONTLIE_API_KEY secrets and function logs.",
+      status,
+      true,
+      bodyText || null,
+    );
+  }
+  if (error instanceof FunctionsHttpError) {
+    return new OddsSlateError("UnknownInvokeError", `HTTP ${status || "?"} while calling nba-odds-slate.`, status, false, bodyText || null);
+  }
+  if (error instanceof Error) {
+    return new OddsSlateError("UnknownInvokeError", error.message, status, false, bodyText || null);
+  }
+  return new OddsSlateError("UnknownInvokeError", String(error), status, false, bodyText || null);
 }
 
 async function invokeNbaOddsSlate(accessToken: string) {
   return supabase.functions.invoke<NbaOddsSlateResponse>("nba-odds-slate", {
     body: {},
     timeout: INVOKE_TIMEOUT_MS,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
 }
 
-export async function fetchNbaOddsSlateScenarios(): Promise<NbaOddsSlateResponse> {
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  if (sessionError) {
-    throw new Error(`Session error: ${sessionError.message}`);
-  }
-  if (!sessionData.session) {
-    throw new Error("You must be signed in to load odds. Sign in and try again.");
-  }
-
-  let accessToken = sessionData.session.access_token;
-  const nowSec = Math.floor(Date.now() / 1000);
-  const exp = sessionData.session.expires_at ?? 0;
-  if (!exp || exp - nowSec < REFRESH_IF_EXPIRES_WITHIN_SEC) {
-    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-    if (!refreshError && refreshed.session) {
-      accessToken = refreshed.session.access_token;
-    }
-  }
-
-  let { data, error, response: invokeResponse } = await invokeNbaOddsSlate(accessToken);
-  if (error) {
-    const res = extractHttpResponse(error, invokeResponse);
-    const status = res?.status ?? 0;
-    const body = res ? await readResponseDetail(res.clone()) : "";
-    const invalidJwt = status === 401 && /invalid\s+jwt/i.test(body);
-
-    if (invalidJwt) {
-      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
-      if (!refreshError && refreshed.session?.access_token) {
-        accessToken = refreshed.session.access_token;
-        const retry = await invokeNbaOddsSlate(accessToken);
-        data = retry.data;
-        error = retry.error;
-        invokeResponse = retry.response;
-      }
-    }
-  }
-  if (error) {
-    const res = extractHttpResponse(error, invokeResponse);
-    const status = res?.status ?? 0;
-    const body = res ? await readResponseDetail(res.clone()) : "";
-    const invalidJwt = status === 401 && /invalid\s+jwt/i.test(body);
-    if (invalidJwt) {
-      const diagnostic = getSupabaseRefDiagnostic();
-      const hadShownNotice = typeof window !== "undefined" && window.sessionStorage.getItem(INVALID_JWT_NOTICE_KEY) === "1";
-      if (typeof window !== "undefined" && !hadShownNotice) {
-        window.sessionStorage.setItem(INVALID_JWT_NOTICE_KEY, "1");
-      }
-      const prefix = hadShownNotice
-        ? "HTTP 401 · Invalid JWT persists after refresh."
-        : "HTTP 401 · Invalid JWT detected.";
-      throw new Error(
-        `${prefix} Sign out and sign in again, then verify VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are from the same Supabase project (${diagnostic}). In Vercel, confirm these variables are set in Production and redeploy after any change.`,
-      );
-    }
-    throw new Error(await describeInvokeFailure(error, invokeResponse ?? null));
-  }
+function normalizeResponse(data: unknown): NbaOddsSlateResponse {
   if (!data || typeof data !== "object") {
-    throw new Error("Empty response from nba-odds-slate");
+    throw new OddsSlateError("UnknownInvokeError", "Empty response from nba-odds-slate.", 0);
   }
-  const raw = data as unknown as Record<string, unknown>;
+  const raw = data as Record<string, unknown>;
   if (typeof raw.error === "string") {
-    throw new Error(raw.error);
+    throw new OddsSlateError("UnknownInvokeError", raw.error, 0);
   }
   const scenariosIn = Array.isArray(raw.scenarios) ? raw.scenarios : [];
   const scenarios = scenariosIn.map((row) => parseInputSnapshot(row));
@@ -197,4 +204,50 @@ export async function fetchNbaOddsSlateScenarios(): Promise<NbaOddsSlateResponse
     odds_requests_used: typeof raw.odds_requests_used === "string" ? raw.odds_requests_used : null,
     disclaimer: typeof raw.disclaimer === "string" ? raw.disclaimer : "",
   };
+}
+
+export async function fetchNbaOddsSlateScenarios(): Promise<NbaOddsSlateResponse> {
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError) {
+    throw new OddsSlateError("UnknownInvokeError", `Session error: ${sessionError.message}`, 0);
+  }
+  const currentSession = sessionData.session;
+  if (!currentSession?.access_token) {
+    throw new OddsSlateError("AuthSessionMissing", "You must be signed in to load odds. Sign in and try again.", 401);
+  }
+
+  let token = currentSession.access_token;
+  let triedRefresh = false;
+
+  for (;;) {
+    const { data, error, response } = await invokeNbaOddsSlate(token);
+    if (!error) {
+      return normalizeResponse(data);
+    }
+
+    const res = extractHttpResponse(error, response);
+    const body = await readResponseBody(res);
+    const mapped = classifyInvokeFailure({ error, status: body.status, bodyText: body.text, parsed: body.parsed });
+
+    if (mapped.code === "AuthTokenInvalid" && !triedRefresh) {
+      triedRefresh = true;
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshed.session?.access_token) {
+        throw new OddsSlateError(
+          "AuthSessionMissing",
+          "Session refresh failed. Sign in again and retry.",
+          401,
+          false,
+          refreshError?.message ?? null,
+        );
+      }
+      token = refreshed.session.access_token;
+      continue;
+    }
+
+    if (mapped.details) {
+      throw new Error(`${mapped.message} · ${mapped.details}`);
+    }
+    throw new Error(mapped.message);
+  }
 }

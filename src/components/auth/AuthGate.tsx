@@ -29,8 +29,25 @@ export function AuthGate({ children }: AuthGateProps) {
         setLoading(false);
       });
 
-    const { data } = onAuthStateChange((nextSession) => {
-      setSession(nextSession);
+    const { data } = onAuthStateChange((event, nextSession) => {
+      if (event === "SIGNED_OUT" && !nextSession) {
+        // Guard against transient signed-out events during token refresh races.
+        void getSession()
+          .then((latest) => {
+            if (!mounted) {
+              return;
+            }
+            setSession(latest ?? null);
+          })
+          .catch(() => {
+            if (!mounted) {
+              return;
+            }
+            setSession(null);
+          });
+        return;
+      }
+      setSession(nextSession ?? null);
     });
     return () => {
       mounted = false;

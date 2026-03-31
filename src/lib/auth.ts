@@ -1,4 +1,4 @@
-import type { Session } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 
 export async function signUp(email: string, password: string) {
@@ -32,6 +32,6 @@ export async function getSession() {
   return data.session;
 }
 
-export function onAuthStateChange(callback: (session: Session | null) => void) {
-  return supabase.auth.onAuthStateChange((_event, session) => callback(session));
+export function onAuthStateChange(callback: (event: AuthChangeEvent, session: Session | null) => void) {
+  return supabase.auth.onAuthStateChange((event, session) => callback(event, session));
 }
