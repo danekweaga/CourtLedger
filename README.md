@@ -134,6 +134,16 @@ Do **not** put these keys in the Vite app or commit them. If a key is ever paste
 
 **“Edge Function returned a non-2xx status code”:** The request reached Supabase; the function responded with an error. After updating the app, the toast should show **HTTP code + a short reason**. Typical fixes: **404** — `VITE_SUPABASE_URL` points at a **different** project than where `nba-odds-slate` was deployed; align the URL ref with **Dashboard → Edge Functions** (same project). **401** — sign in again; same Supabase project in `.env` as where you deployed. **500** — set secrets `THE_ODDS_API_KEY` and `BALLDONTLIE_API_KEY` (Dashboard → Edge Functions → Secrets). **502** — Odds API key or quota issue. Check **Edge Functions → nba-odds-slate → Logs** for the full stack trace.
 
+**Production-only 401 Invalid JWT (Vercel checklist):**
+
+1. In Vercel project settings, verify **Environment Variables** for the **Production** environment:
+   - `VITE_SUPABASE_URL` must be `https://xswtikkyszzqtgdytlkk.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY` must be from the same Supabase project (`ref: xswtikkyszzqtgdytlkk` in JWT payload)
+2. Ensure the same values are not accidentally different in Preview vs Production for the currently served domain.
+3. Trigger a fresh Production redeploy after env edits (Vercel does not retroactively update old builds).
+4. In browser DevTools on the production domain, clear site data (or remove `localStorage` keys starting with `sb-`), then sign in again.
+5. Confirm `nba-odds-slate` is deployed in project `xswtikkyszzqtgdytlkk` in Supabase Dashboard.
+
 ## Manual Live Tracking and Future API Integration
 
 The MVP works with manual live updates from the dashboard. Future provider integration is designed around:
@@ -159,6 +169,7 @@ Replace `ManualLiveDataProvider` with an API-backed implementation later.
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
 5. Deploy.
+6. If auth worked before but now fails with `Invalid JWT`, re-check variable values in the **Production** scope specifically and redeploy.
 
 ### Post-deploy checklist
 

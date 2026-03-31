@@ -34,9 +34,25 @@ function getProjectRefFromAnonKey(key: string): string | null {
 
 const urlRef = getProjectRefFromUrl(supabaseUrl);
 const anonRef = getProjectRefFromAnonKey(supabaseAnonKey);
+export const SUPABASE_PROJECT_REFS = {
+  urlRef,
+  anonRef,
+};
+
+export function getSupabaseRefDiagnostic(): string {
+  const parts: string[] = [];
+  if (urlRef) {
+    parts.push(`url_ref=${urlRef}`);
+  }
+  if (anonRef) {
+    parts.push(`anon_ref=${anonRef}`);
+  }
+  return parts.length ? parts.join(", ") : "url_ref=unknown, anon_ref=unknown";
+}
+
 if (urlRef && anonRef && urlRef !== anonRef) {
   throw new Error(
-    "VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are from different Supabase projects. Copy both from the same Dashboard → Settings → API page.",
+    `VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are from different Supabase projects (${getSupabaseRefDiagnostic()}). Copy both from the same Dashboard → Settings → API page.`,
   );
 }
 

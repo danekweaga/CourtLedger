@@ -1,6 +1,6 @@
 import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from "@supabase/supabase-js";
 import type { BetIntelligenceScenarioInput } from "../types/betIntelligence";
-import { supabase } from "./supabase";
+import { getSupabaseRefDiagnostic, supabase } from "./supabase";
 import { parseInputSnapshot } from "../utils/intelligenceForm";
 
 export interface NbaOddsSlateResponse {
@@ -99,6 +99,7 @@ async function describeInvokeFailure(error: unknown, invokeResponse?: Response |
  * Requires deployed function `nba-odds-slate` and secrets THE_ODDS_API_KEY, BALLDONTLIE_API_KEY.
  */
 const REFRESH_IF_EXPIRES_WITHIN_SEC = 600;
+const INVALID_JWT_NOTICE_KEY = "nbaOddsSlateInvalidJwtNoticeShown";
 
 function extractHttpResponse(error: unknown, invokeResponse?: Response | null): Response | null {
   if (invokeResponse) {
@@ -166,10 +167,16 @@ export async function fetchNbaOddsSlateScenarios(): Promise<NbaOddsSlateResponse
     const body = res ? await readResponseDetail(res.clone()) : "";
     const invalidJwt = status === 401 && /invalid\s+jwt/i.test(body);
     if (invalidJwt) {
-      // Ensure stale/wrong-project tokens are removed so the next login is clean.
-      await supabase.auth.signOut({ scope: "local" });
+      const diagnostic = getSupabaseRefDiagnostic();
+      const hadShownNotice = typeof window !== "undefined" && window.sessionStorage.getItem(INVALID_JWT_NOTICE_KEY) === "1";
+      if (typeof window !== "undefined" && !hadShownNotice) {
+        window.sessionStorage.setItem(INVALID_JWT_NOTICE_KEY, "1");
+      }
+      const prefix = hadShownNotice
+        ? "HTTP 401 · Invalid JWT persists after refresh."
+        : "HTTP 401 · Invalid JWT detected.";
       throw new Error(
-        "HTTP 401 · Invalid JWT. Cleared local auth session to recover from stale or wrong-project tokens. Sign in again, then verify VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are from the same Supabase project, and restart npm run dev after .env changes.",
+        `${prefix} Sign out and sign in again, then verify VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are from the same Supabase project (${diagnostic}). In Vercel, confirm these variables are set in Production and redeploy after any change.`,
       );
     }
     throw new Error(await describeInvokeFailure(error, invokeResponse ?? null));
