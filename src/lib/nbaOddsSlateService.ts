@@ -100,6 +100,29 @@ async function describeInvokeFailure(error: unknown, invokeResponse?: Response |
  */
 const REFRESH_IF_EXPIRES_WITHIN_SEC = 600;
 
+function extractHttpResponse(error: unknown, invokeResponse?: Response | null): Response | null {
+  if (invokeResponse) {
+    return invokeResponse;
+  }
+  if (error && typeof error === "object" && "context" in error) {
+    const maybeContext = (error as { context?: unknown }).context;
+    if (maybeContext instanceof Response) {
+      return maybeContext;
+    }
+  }
+  return null;
+}
+
+async function invokeNbaOddsSlate(accessToken: string) {
+  return supabase.functions.invoke<NbaOddsSlateResponse>("nba-odds-slate", {
+    body: {},
+    timeout: INVOKE_TIMEOUT_MS,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+}
+
 export async function fetchNbaOddsSlateScenarios(): Promise<NbaOddsSlateResponse> {
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   if (sessionError) {
@@ -119,14 +142,36 @@ export async function fetchNbaOddsSlateScenarios(): Promise<NbaOddsSlateResponse
     }
   }
 
-  const { data, error, response: invokeResponse } = await supabase.functions.invoke<NbaOddsSlateResponse>("nba-odds-slate", {
-    body: {},
-    timeout: INVOKE_TIMEOUT_MS,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  let { data, error, response: invokeResponse } = await invokeNbaOddsSlate(accessToken);
   if (error) {
+    const res = extractHttpResponse(error, invokeResponse);
+    const status = res?.status ?? 0;
+    const body = res ? await readResponseDetail(res.clone()) : "";
+    const invalidJwt = status === 401 && /invalid\s+jwt/i.test(body);
+
+    if (invalidJwt) {
+      const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+      if (!refreshError && refreshed.session?.access_token) {
+        accessToken = refreshed.session.access_token;
+        const retry = await invokeNbaOddsSlate(accessToken);
+        data = retry.data;
+        error = retry.error;
+        invokeResponse = retry.response;
+      }
+    }
+  }
+  if (error) {
+    const res = extractHttpResponse(error, invokeResponse);
+    const status = res?.status ?? 0;
+    const body = res ? await readResponseDetail(res.clone()) : "";
+    const invalidJwt = status === 401 && /invalid\s+jwt/i.test(body);
+    if (invalidJwt) {
+      // Ensure stale/wrong-project tokens are removed so the next login is clean.
+      await supabase.auth.signOut({ scope: "local" });
+      throw new Error(
+        "HTTP 401 · Invalid JWT. Cleared local auth session to recover from stale or wrong-project tokens. Sign in again, then verify VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are from the same Supabase project, and restart npm run dev after .env changes.",
+      );
+    }
     throw new Error(await describeInvokeFailure(error, invokeResponse ?? null));
   }
   if (!data || typeof data !== "object") {
