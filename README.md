@@ -36,6 +36,19 @@ CourtLedger is a one-page, full-stack NBA betting dashboard built with React, Ty
 4. Start development server:
    - `npm run dev`
 
+### Supabase CLI (Windows / no global install)
+
+Typing `supabase` in PowerShell fails unless the CLI is installed globally. This repo lists **`supabase` in `devDependencies`**, so from the **project root** use **`npx`**:
+
+```powershell
+npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase secrets set THE_ODDS_API_KEY=your_key BALLDONTLIE_API_KEY=your_key
+npx supabase functions deploy nba-odds-slate
+```
+
+Or: `npm run sb:login`, `npm run sb:link -- --project-ref YOUR_PROJECT_REF`, `npm run sb:deploy:odds`.
+
 ## Supabase Table Expectations
 
 The app is wired to these existing tables:

@@ -7,7 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sb": "supabase",
+    "sb:login": "supabase login",
+    "sb:link": "supabase link",
+    "sb:deploy:odds": "supabase functions deploy nba-odds-slate",
+    "sb:deploy:settle": "supabase functions deploy sync-bet-settlements --no-verify-jwt"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.1",
@@ -34,6 +39,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
     "postcss": "^8.5.8",
+    "supabase": "^2.84.5",
     "tailwindcss": "^4.2.2",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.57.0",
