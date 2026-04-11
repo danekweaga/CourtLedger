@@ -11,6 +11,19 @@ interface BetIntelligencePanelProps {
   analyzing: boolean;
 }
 
+function toNumberOr(value: string, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toNullableNumber(value: string): number | null {
+  if (value.trim() === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function BetIntelligencePanel({ scenario, onChange, onAnalyze, analyzing }: BetIntelligencePanelProps) {
   const set = <K extends keyof BetIntelligenceScenarioInput>(key: K, value: BetIntelligenceScenarioInput[K]) => {
     onChange({ ...scenario, [key]: value });
@@ -63,7 +76,13 @@ export function BetIntelligencePanel({ scenario, onChange, onAnalyze, analyzing 
         </label>
         <label>
           <span className="text-[10px] font-bold uppercase text-slate-500">Sportsbook line</span>
-          <input className={field} type="number" step="0.5" value={scenario.line} onChange={(e) => set("line", Number(e.target.value))} />
+          <input
+            className={field}
+            type="number"
+            step="0.5"
+            value={scenario.line}
+            onChange={(e) => set("line", toNumberOr(e.target.value, scenario.line))}
+          />
         </label>
         <label>
           <span className="text-[10px] font-bold uppercase text-slate-500">Opening line</span>
@@ -72,13 +91,18 @@ export function BetIntelligencePanel({ scenario, onChange, onAnalyze, analyzing 
             type="number"
             step="0.5"
             value={scenario.opening_line ?? ""}
-            onChange={(e) => set("opening_line", e.target.value === "" ? null : Number(e.target.value))}
+            onChange={(e) => set("opening_line", toNullableNumber(e.target.value))}
             placeholder="Optional"
           />
         </label>
         <label>
           <span className="text-[10px] font-bold uppercase text-slate-500">Current odds (American)</span>
-          <input className={field} type="number" value={scenario.current_odds} onChange={(e) => set("current_odds", Number(e.target.value))} />
+          <input
+            className={field}
+            type="number"
+            value={scenario.current_odds}
+            onChange={(e) => set("current_odds", toNumberOr(e.target.value, scenario.current_odds))}
+          />
         </label>
         <label>
           <span className="text-[10px] font-bold uppercase text-slate-500">Home / Away</span>
@@ -103,7 +127,7 @@ export function BetIntelligencePanel({ scenario, onChange, onAnalyze, analyzing 
             min={0}
             max={7}
             value={scenario.rest_days ?? ""}
-            onChange={(e) => set("rest_days", e.target.value === "" ? null : Number(e.target.value))}
+            onChange={(e) => set("rest_days", toNullableNumber(e.target.value))}
             placeholder="Optional"
           />
         </label>
@@ -115,7 +139,7 @@ export function BetIntelligencePanel({ scenario, onChange, onAnalyze, analyzing 
             min={1}
             max={30}
             value={scenario.opponent_pace_rank ?? ""}
-            onChange={(e) => set("opponent_pace_rank", e.target.value === "" ? null : Number(e.target.value))}
+            onChange={(e) => set("opponent_pace_rank", toNullableNumber(e.target.value))}
             placeholder="Optional"
           />
         </label>

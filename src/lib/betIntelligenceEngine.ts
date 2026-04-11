@@ -167,37 +167,47 @@ function buildHiddenEdge(input: BetIntelligenceScenarioInput, line: ReturnType<t
  * Full deterministic intelligence pass for one NBA scenario (manual inputs).
  */
 export function analyzeBetIntelligence(input: BetIntelligenceScenarioInput): IntelligenceReportResult {
-  const projection = computeProjection(input);
-  const lineMove = analyzeLineMovement(input.opening_line, input.line, input.over_under);
-  const side = input.over_under;
+  const safeLine = Number.isFinite(input.line) ? input.line : 0;
+  const safeOdds = Number.isFinite(input.current_odds) ? input.current_odds : -110;
+  const safeOpeningLine = input.opening_line != null && Number.isFinite(input.opening_line) ? input.opening_line : null;
+  const safeInput: BetIntelligenceScenarioInput = {
+    ...input,
+    line: safeLine,
+    current_odds: safeOdds,
+    opening_line: safeOpeningLine,
+  };
+
+  const projection = computeProjection(safeInput);
+  const lineMove = analyzeLineMovement(safeInput.opening_line, safeInput.line, safeInput.over_under);
+  const side = safeInput.over_under;
 
   let line_gap = 0;
   let prediction: IntelligenceReportResult["prediction"] = "MISS";
 
   if (side === "over") {
-    line_gap = projection - input.line;
-    prediction = projection > input.line + 0.25 ? "HIT" : "MISS";
+    line_gap = projection - safeInput.line;
+    prediction = projection > safeInput.line + 0.25 ? "HIT" : "MISS";
   } else if (side === "under") {
-    line_gap = input.line - projection;
-    prediction = projection < input.line - 0.25 ? "HIT" : "MISS";
+    line_gap = safeInput.line - projection;
+    prediction = projection < safeInput.line - 0.25 ? "HIT" : "MISS";
   } else {
     line_gap = 0;
-    prediction = Math.abs(projection - input.line) < 0.5 ? "MISS" : projection > input.line ? "HIT" : "MISS";
+    prediction = Math.abs(projection - safeInput.line) < 0.5 ? "MISS" : projection > safeInput.line ? "HIT" : "MISS";
   }
 
-  const data_quality = scoreDataQuality(input);
-  const trap = detectTrap(input, lineMove, line_gap);
+  const data_quality = scoreDataQuality(safeInput);
+  const trap = detectTrap(safeInput, lineMove, line_gap);
   const sim = runSimulation({
     projection,
-    line: input.line,
+    line: safeInput.line,
     side,
-    market_type: input.market_type,
+    market_type: safeInput.market_type,
     inflated_volatility: trap.flag || lineMove.inflated_line,
   });
 
   const edgePack = computeEdgeModel({
     line_gap,
-    current_odds: input.current_odds,
+    current_odds: safeInput.current_odds,
     data_quality,
     trap_warning: trap.flag,
     value_gone_from_line: lineMove.value_gone,
@@ -207,21 +217,21 @@ export function analyzeBetIntelligence(input: BetIntelligenceScenarioInput): Int
   const final_verdict = pickVerdict(edgePack.edge_score, edgePack.calibrated_hit_probability, trap.flag, lineMove.value_gone);
   const best_time_to_bet = bestTimeToBet(lineMove, final_verdict, trap.flag);
 
-  const risk_flags = buildRiskFlags({ input, line: lineMove, sim, data_quality });
+  const risk_flags = buildRiskFlags({ input: safeInput, line: lineMove, sim, data_quality });
 
-  const pick = `${input.player_name || "Player"} ${input.market_type}${side ? ` ${side}` : ""} ${input.line} (${input.team} vs ${input.opponent})`;
+  const pick = `${safeInput.player_name || "Player"} ${safeInput.market_type}${side ? ` ${side}` : ""} ${safeInput.line} (${safeInput.team} vs ${safeInput.opponent})`;
 
   return {
     pick,
     prediction,
-    line: input.line,
+    line: safeInput.line,
     projection,
     calibrated_hit_probability: edgePack.calibrated_hit_probability,
     confidence: edgePack.edge_score >= 7 ? "High" : edgePack.edge_score >= 5 ? "Medium" : "Low",
     edge_score: edgePack.edge_score,
-    main_reasons: buildMainReasons(input, line_gap, side, data_quality, lineMove),
-    what_changed_today: buildWhatChangedToday(input, lineMove),
-    hidden_edge: buildHiddenEdge(input, lineMove),
+    main_reasons: buildMainReasons(safeInput, line_gap, side, data_quality, lineMove),
+    what_changed_today: buildWhatChangedToday(safeInput, lineMove),
+    hidden_edge: buildHiddenEdge(safeInput, lineMove),
     trap_warning: trap.flag,
     trap_warning_reason: trap.flag ? trap.reason : "No major trap pattern from manual inputs and line shape.",
     simulation_low: sim.simulation_low,

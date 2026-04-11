@@ -13,6 +13,19 @@ interface TopPicksTodayProps {
 
 const ODDS_LOAD_COOLDOWN_MS = 90_000;
 
+function toNumberOr(value: string, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toNullableNumber(value: string): number | null {
+  if (value.trim() === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function TopPicksToday({ saveLoading = false, onAddToTracker }: TopPicksTodayProps) {
   const [rows, setRows] = useState<BetIntelligenceScenarioInput[]>(() => [emptyIntelligenceScenario(), emptyIntelligenceScenario()]);
   const [oddsLoading, setOddsLoading] = useState(false);
@@ -70,7 +83,9 @@ export function TopPicksToday({ saveLoading = false, onAddToTracker }: TopPicksT
       toast(out.disclaimer, { duration: 7000 });
       setOddsCooldownUntil(Date.now() + ODDS_LOAD_COOLDOWN_MS);
     } catch (e) {
+      setRows(sampleBetIntelligenceScenarios.map((s) => ({ ...s })));
       toast.error(e instanceof Error ? e.message : "Could not load odds slate.");
+      toast("Live odds unavailable. Loaded offline sample slate so the scanner can still run.", { duration: 6000 });
     } finally {
       setOddsLoading(false);
     }
@@ -160,21 +175,21 @@ export function TopPicksToday({ saveLoading = false, onAddToTracker }: TopPicksT
                 step="0.5"
                 placeholder="Line"
                 value={row.line}
-                onChange={(e) => updateRow(i, { line: Number(e.target.value) })}
+                onChange={(e) => updateRow(i, { line: toNumberOr(e.target.value, row.line) })}
               />
               <input
                 className="rounded-lg bg-slate-900 px-2 py-2 text-xs text-slate-200 ring-1 ring-slate-800"
                 type="number"
                 placeholder="Open"
                 value={row.opening_line ?? ""}
-                onChange={(e) => updateRow(i, { opening_line: e.target.value === "" ? null : Number(e.target.value) })}
+                onChange={(e) => updateRow(i, { opening_line: toNullableNumber(e.target.value) })}
               />
               <input
                 className="rounded-lg bg-slate-900 px-2 py-2 text-xs text-slate-200 ring-1 ring-slate-800"
                 type="number"
                 placeholder="Odds"
                 value={row.current_odds}
-                onChange={(e) => updateRow(i, { current_odds: Number(e.target.value) })}
+                onChange={(e) => updateRow(i, { current_odds: toNumberOr(e.target.value, row.current_odds) })}
               />
             </div>
           </div>

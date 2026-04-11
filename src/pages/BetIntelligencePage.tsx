@@ -80,7 +80,7 @@ export function BetIntelligencePage({ userId, bets, saveLoading = false, onAddFr
         <p className="text-xs font-bold uppercase tracking-[0.25em] text-emerald-400/90">NBA · Sharp tools</p>
         <h1 className="font-headline text-3xl font-extrabold text-white md:text-4xl">Bet Intelligence</h1>
         <p className="mt-2 max-w-2xl text-sm text-slate-400">
-          Manual-input analysis with conservative probabilities. Save reports to Supabase, attach to open bets, and revisit history anytime.
+          Rule-based analysis from your manual inputs and live odds when available. Save reports to Supabase, attach to open bets, and revisit history anytime.
         </p>
       </header>
 
