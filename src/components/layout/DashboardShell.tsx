@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { CourtLedgerLogo } from "../branding/CourtLedgerLogo";
 
 interface DashboardShellProps {
   children: ReactNode;
@@ -11,7 +12,7 @@ export function DashboardShell({ children, onAddBetClick }: DashboardShellProps)
       <header className="fixed top-0 z-50 w-full border-b border-slate-800/40 bg-[#0b1326]/95 backdrop-blur">
         <div className="flex items-center justify-between gap-4 bg-[#131b2e] px-4 py-3 md:px-6">
           <div className="flex items-center gap-8">
-            <span className="brand-font text-xl font-bold tracking-tight text-white">CourtLedger</span>
+            <CourtLedgerLogo className="h-10 w-auto" />
             <nav className="hidden items-center gap-6 md:flex">
               <a className="border-b-2 border-green-400 pb-1 text-sm font-bold text-green-400" href="#">
                 Dashboard

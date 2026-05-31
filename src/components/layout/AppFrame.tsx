@@ -1,6 +1,7 @@
 import type { Session } from "@supabase/supabase-js";
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
+import { CourtLedgerLogo } from "../branding/CourtLedgerLogo";
 
 interface AppFrameProps {
   session: Session;
@@ -26,8 +27,10 @@ export function AppFrame({ session, title, subtitle, activeNav, onAddBet, onSign
     <div className="min-h-screen bg-surface text-on-surface">
       <aside className="fixed left-0 top-0 hidden h-screen w-64 flex-col border-r border-slate-800/50 bg-slate-900 lg:flex">
         <div className="p-6">
-          <h1 className="font-headline text-2xl font-extrabold tracking-tighter text-emerald-400">CourtLedger</h1>
-          <p className="mt-1 text-xs uppercase tracking-widest text-on-surface-variant">Tactical Command</p>
+          <NavLink to="/" aria-label="CourtLedger home">
+            <CourtLedgerLogo className="h-24 w-auto max-w-full" />
+          </NavLink>
+          <p className="mt-2 text-xs uppercase tracking-widest text-on-surface-variant">Tactical Command</p>
         </div>
         <nav className="flex-1 px-2 space-y-1">
           {navItems.map((item) => {
@@ -69,9 +72,14 @@ export function AppFrame({ session, title, subtitle, activeNav, onAddBet, onSign
       </aside>
 
       <header className="fixed top-0 z-50 flex w-full items-center justify-between border-b border-slate-800/20 bg-slate-950/70 px-6 py-4 backdrop-blur-xl lg:pl-72">
-        <div>
-          <h2 className="font-headline text-xl font-bold text-on-surface lg:text-2xl">{title}</h2>
-          {subtitle ? <p className="text-xs text-on-surface-variant">{subtitle}</p> : null}
+        <div className="flex items-center gap-3">
+          <NavLink to="/" className="shrink-0 lg:hidden" aria-label="CourtLedger home">
+            <CourtLedgerLogo variant="icon" className="h-9 w-9" />
+          </NavLink>
+          <div>
+            <h2 className="font-headline text-xl font-bold text-on-surface lg:text-2xl">{title}</h2>
+            {subtitle ? <p className="text-xs text-on-surface-variant">{subtitle}</p> : null}
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <NavLink className="hidden text-sm text-slate-400 hover:text-slate-200 md:block" to="/analytics">

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { CourtLedgerLogo } from "../branding/CourtLedgerLogo";
 
 interface AuthFormProps {
   onLogin: (email: string, password: string) => Promise<void>;
@@ -22,8 +23,10 @@ export function AuthForm({ onLogin, onSignup, loading }: AuthFormProps) {
 
   return (
     <div className="mx-auto mt-10 w-full max-w-md rounded-xl border border-slate-800 bg-slate-900/70 p-6 shadow-lg">
-      <h1 className="text-2xl font-semibold text-slate-100">CourtLedger</h1>
-      <p className="mt-1 text-sm text-slate-400">NBA bet tracking dashboard</p>
+      <div className="flex flex-col items-center text-center">
+        <CourtLedgerLogo className="h-20 w-auto" />
+        <p className="mt-2 text-sm text-slate-400">NBA bet tracking dashboard</p>
+      </div>
       <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
         <label className="block">
           <span className="mb-1 block text-sm text-slate-300">Email</span>
