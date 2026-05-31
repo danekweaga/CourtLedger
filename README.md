@@ -1,186 +1,516 @@
 # CourtLedger
 
-CourtLedger is a one-page, full-stack NBA betting dashboard built with React, TypeScript, Tailwind CSS, Supabase, Recharts, and XLSX export support.
+CourtLedger is a full-stack **NBA betting tracker and analytics dashboard**. It helps you log props and game bets, track active positions, grade outcomes, visualize ROI, export your ledger, and explore optional tooling around props analysis and highlights.
 
-## Features
+**Live app:** [https://court-ledger.vercel.app](https://court-ledger.vercel.app)
 
-- Supabase auth: sign up, log in, log out, persistent session.
-- User-scoped bets data with CRUD against your existing `bets` table.
-- Manual live tracking with architecture ready for a future API provider.
-- Active and settled bet sections with quick grading and duplicate actions.
-- Profitability calculations: net P/L, total staked, ROI, win rate, average stake/odds.
-- Analytics charts (profit over time, by market type, by sportsbook).
-- CSV and XLSX exports for all or filtered datasets.
-- Stream URL panel with embed fallback.
-- Bet Intelligence **Add to tracker** from Top Picks or a single analysis run (creates a pending bet with auto-settle enabled).
-- Optional **auto-settle** for supported NBA player props via Supabase Edge Function + [balldontlie](https://www.balldontlie.io) (points, rebounds, assists, threes, PRA, steals, blocks, turnovers).
+---
 
-## Stack
+## Table of contents
 
-- React + TypeScript + Vite
-- Tailwind CSS
-- Supabase (`@supabase/supabase-js`)
-- Recharts
-- SheetJS (`xlsx`)
-- react-hot-toast
+1. [What this project is](#what-this-project-is)
+2. [Architecture overview](#architecture-overview)
+3. [App routes and features](#app-routes-and-features)
+4. [Tech stack](#tech-stack)
+5. [Repository layout](#repository-layout)
+6. [Local development](#local-development)
+7. [Environment variables](#environment-variables)
+8. [Supabase setup](#supabase-setup)
+9. [Vercel deployment](#vercel-deployment)
+10. [Serverless API routes](#serverless-api-routes)
+11. [Supabase Edge Functions](#supabase-edge-functions)
+12. [Keep-alive system](#keep-alive-system)
+13. [Bet Intelligence — how it works and why it often fails](#bet-intelligence--how-it-works-and-why-it-often-fails)
+14. [Highlight Hub](#highlight-hub)
+15. [Scripts](#scripts)
+16. [Security notes](#security-notes)
 
-## Local Setup
+---
 
-1. Install dependencies:
-   - `npm install`
-2. Create environment file:
-   - Copy `.env.example` to `.env.local`
-3. Fill in Supabase variables in `.env.local`:
-   - `VITE_SUPABASE_URL`
-   - `VITE_SUPABASE_ANON_KEY`
-4. Start development server:
-   - `npm run dev`
+## What this project is
 
-### Supabase CLI (Windows / no global install)
+CourtLedger is **not** a sportsbook. It is a personal command center for:
 
-Typing `supabase` in PowerShell fails unless the CLI is installed globally. This repo lists **`supabase` in `devDependencies`**, so from the **project root** use **`npx`**:
+- Recording bets (player props, spreads, totals, etc.)
+- Tracking pending vs settled results and P/L
+- Filtering, sorting, duplicating, and quick-grading bets
+- Analytics charts (profit over time, by market, by book)
+- CSV / XLSX export
+- Optional auto-settlement for supported NBA player props via balldontlie
+- Optional structured prop analysis (Bet Intelligence)
+- Embedded official NBA YouTube highlights (Highlight Hub)
+
+Authentication is handled by **Supabase Auth**. All bet data is scoped per user with **Row Level Security (RLS)**.
+
+---
+
+## Architecture overview
+
+```mermaid
+flowchart TB
+  subgraph browser [Browser - React SPA]
+    Pages[Pages and Components]
+    ClientSupabase[Supabase Client - anon key]
+    Pages --> ClientSupabase
+  end
+
+  subgraph vercel [Vercel]
+    Static[Static Vite build - dist]
+    ApiKeepalive[/api/keepalive]
+    ApiHighlights[/api/youtube-highlights]
+  end
+
+  subgraph supabase [Supabase]
+    Auth[Auth]
+    DB[(PostgreSQL)]
+    EdgeOdds[nba-odds-slate]
+    EdgeSettle[sync-bet-settlements]
+  end
+
+  subgraph external [External APIs]
+    YouTube[YouTube Data API]
+    OddsAPI[The Odds API]
+    BDL[balldontlie]
+  end
+
+  Pages --> Static
+  Pages --> ApiHighlights
+  ClientSupabase --> Auth
+  ClientSupabase --> DB
+  ClientSupabase --> EdgeOdds
+  ApiKeepalive --> DB
+  ApiHighlights --> YouTube
+  EdgeOdds --> OddsAPI
+  EdgeOdds --> BDL
+  EdgeSettle --> BDL
+  EdgeSettle --> DB
+```
+
+| Layer | Role |
+|-------|------|
+| **React + Vite** | Single-page app, client routing, UI |
+| **Supabase client** | Auth, CRUD on `bets`, intelligence report history |
+| **Vercel serverless** | Server-only secrets (YouTube, Supabase service role for keepalive) |
+| **Supabase Edge Functions** | Odds slate fetch, auto-settlement cron target |
+| **GitHub Actions** | Weekly ping to keep Vercel + Supabase warm |
+
+---
+
+## App routes and features
+
+| Route | Page | Purpose |
+|-------|------|---------|
+| `/` | Command Center | Add/edit bets, active & settled lists, filters, export, stream panel for individual bets |
+| `/history` | Bet History | Full ledger with edit/grade/duplicate |
+| `/live` | Highlight Hub | Embedded recent official NBA YouTube highlights |
+| `/markets` | Market Intelligence | Market-level views from your bet data |
+| `/analytics` | ROI Analytics | Charts and performance metrics |
+| `/intelligence` | Bet Intelligence | Manual prop analysis + optional live odds slate |
+| `/settings` | Settings | Account preferences |
+
+**Core betting features**
+
+- Supabase auth (sign up, log in, sign out, persistent session)
+- User-scoped bet CRUD with column pruning for schema compatibility
+- Active / settled sections, quick grade, duplicate
+- Net P/L, ROI, win rate, average stake/odds
+- Bet slip OCR helper (Tesseract.js)
+- CSV and XLSX export
+- Per-bet stream URL embed on Command Center (`StreamPanel`)
+- Auto-settle for supported NBA player props (optional)
+
+---
+
+## Tech stack
+
+- **Frontend:** React 19, TypeScript, Vite, React Router, Tailwind CSS
+- **Backend / data:** Supabase (Auth, Postgres, Edge Functions)
+- **Hosting:** Vercel (static SPA + serverless API routes)
+- **Charts:** Recharts
+- **Export:** SheetJS (`xlsx`)
+- **Toasts:** react-hot-toast
+- **OCR:** tesseract.js
+
+---
+
+## Repository layout
+
+```
+CourtLedger/
+├── api/                          # Vercel serverless functions
+│   ├── keepalive.ts              # Weekly Supabase ping
+│   └── youtube-highlights.ts     # YouTube Data API proxy
+├── lib/
+│   └── supabaseAdmin.ts          # Server-only Supabase client (service role)
+├── src/
+│   ├── pages/                    # Route-level pages
+│   ├── components/               # UI by domain (bets, auth, intelligence, …)
+│   ├── hooks/                    # useCourtLedgerData, useIntelligenceReports
+│   ├── lib/                      # Services (bets, auth, intelligence engine, …)
+│   ├── types/                    # TypeScript models
+│   └── utils/                    # Grading, export, filtering, etc.
+├── supabase/
+│   ├── functions/                # Edge Functions
+│   └── migrations/               # SQL migrations
+├── .github/workflows/
+│   └── keepalive.yml             # Weekly cron → /api/keepalive
+├── vercel.json                   # SPA rewrites + /api/* passthrough
+└── README.md
+```
+
+---
+
+## Local development
+
+### Prerequisites
+
+- Node.js 18+
+- A Supabase project
+- (Optional) Supabase CLI via `npx supabase`
+- (Optional) Vercel CLI for testing API routes locally
+
+### Steps
+
+1. **Install dependencies**
+
+   ```bash
+   npm install
+   ```
+
+2. **Environment file**
+
+   Create `.env.local` (or `.env`) at the project root:
+
+   ```env
+   VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+   VITE_SUPABASE_ANON_KEY=your_anon_key
+   ```
+
+3. **Run the dev server**
+
+   ```bash
+   npm run dev
+   ```
+
+   Open the URL Vite prints (usually `http://localhost:5173`).
+
+4. **Test Vercel API routes locally**
+
+   The Vite dev server does **not** serve `/api/*`. Use:
+
+   ```bash
+   npx vercel dev
+   ```
+
+   Then hit `http://localhost:3000/api/keepalive` or `/api/youtube-highlights`.
+
+### Supabase CLI (Windows-friendly)
+
+The CLI is in `devDependencies`. From the project root:
 
 ```powershell
 npx supabase login
 npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase db push
 npx supabase secrets set THE_ODDS_API_KEY=your_key BALLDONTLIE_API_KEY=your_key
 npx supabase functions deploy nba-odds-slate
+npx supabase functions deploy sync-bet-settlements --no-verify-jwt
 ```
 
-Or: `npm run sb:login`, `npm run sb:link -- --project-ref YOUR_PROJECT_REF`, `npm run sb:deploy:odds`.
+Or use npm scripts: `npm run sb:login`, `npm run sb:link`, `npm run sb:deploy:odds`, `npm run sb:deploy:settle`.
 
-## Supabase Table Expectations
+---
 
-The app is wired to these existing tables:
+## Environment variables
 
-- `profiles`
-- `bets`
-- `live_stats_cache`
+### Client-side (Vite — exposed to the browser)
 
-It expects RLS policies to allow each authenticated user to access only their own rows (`user_id`-scoped).
+| Variable | Where used |
+|----------|------------|
+| `VITE_SUPABASE_URL` | `src/lib/supabase.ts` |
+| `VITE_SUPABASE_ANON_KEY` | `src/lib/supabase.ts` |
 
-### Bet Intelligence (`bet_intelligence_reports`)
+These are baked into the build at deploy time. Changing them in Vercel requires a **redeploy**.
 
-Run the migration in Supabase: open **SQL** → **New query**, paste the full file, **Run** (or use `supabase db push` if the repo is linked):
+### Server-side (Vercel — never exposed to the browser)
 
-- `supabase/migrations/20260330120000_bet_intelligence_reports.sql`
+| Variable | Where used |
+|----------|------------|
+| `SUPABASE_URL` | `lib/supabaseAdmin.ts` (keepalive) |
+| `SUPABASE_SERVICE_ROLE_KEY` | `lib/supabaseAdmin.ts` (keepalive) |
+| `YOUTUBE_DATA_API_KEY` | `api/youtube-highlights.ts` |
+| `YOUTUBE_NBA_CHANNEL_ID` | Optional override for Highlight Hub channel |
 
-Policies are idempotent (dropped before recreate). Command Center includes an **Open Intelligence** shortcut to `/intelligence`.
+**Do not** prefix server secrets with `VITE_`. Do not commit API keys to git.
 
-This creates the table, RLS, indexes, and `updated_at` trigger. The app route is **`/intelligence`** (sidebar: **Bet Intelligence**).
+---
 
-**Code map:** types `src/types/betIntelligence.ts`; engine `src/lib/betIntelligenceEngine.ts` plus `projectionEngine`, `lineMovement`, `edgeScoring`, `simulationEngine`, `riskAssessment`; Supabase `src/lib/betIntelligenceService.ts`; hook `src/hooks/useIntelligenceReports.ts`; UI `src/components/intelligence/*` and page `src/pages/BetIntelligencePage.tsx`. Future feeds: `src/lib/intelligenceDataProvider.ts`. Sample slate rows: `src/data/sampleBetIntelligence.ts`.
+## Supabase setup
+
+### Expected tables
+
+- `profiles` — user profile rows
+- `bets` — main betting ledger
+- `live_stats_cache` — reserved for future live data
+- `bet_intelligence_reports` — saved intelligence reports (requires migration)
+
+All tables should use RLS so users only access their own `user_id` rows.
+
+### Migrations
+
+Run in Supabase **SQL Editor** or via `supabase db push`:
+
+| File | Purpose |
+|------|---------|
+| `supabase/migrations/20260330120000_bet_intelligence_reports.sql` | Intelligence report history |
+| `supabase/migrations/20260330140000_bets_auto_settle.sql` | Auto-settle columns on `bets` |
+
+The app uses **column pruning** on insert/update, so older schemas still load until you migrate.
 
 ### Auto-settle columns on `bets`
 
-Run the migration in the Supabase SQL editor (or via CLI):
+Adds: `auto_settle_enabled`, `stats_player_id`, `stats_game_id`, `last_auto_settle_at`, `auto_settle_error`.
 
-- `supabase/migrations/20260330140000_bets_auto_settle.sql`
+Command Center bet form includes **Auto-settle** and optional stats API IDs. Grading logic is shared with `src/utils/propSettlement.ts` and the Edge Function — keep them aligned if you change rules.
 
-Adds `auto_settle_enabled`, `stats_player_id`, `stats_game_id`, `last_auto_settle_at`, and `auto_settle_error`. The app uses **column pruning** on insert/update, so older schemas still load until you migrate.
+---
 
-**UI:** Command Center bet form includes **Auto-settle** and optional **Stats API player/game id** fields (advanced). Active bets show an **Auto-settle on** label and any settle error hint.
+## Vercel deployment
 
-### Edge Function `sync-bet-settlements`
-
-Deploy with the [Supabase CLI](https://supabase.com/docs/guides/functions):
-
-```bash
-supabase functions deploy sync-bet-settlements --no-verify-jwt
-```
-
-Set secrets in the Supabase project (**Edge Functions → Secrets** or CLI):
-
-- `BALLDONTLIE_API_KEY` — from your balldontlie account; sent as the `Authorization` header.
-- `CRON_SECRET` — optional; when set, every invocation must include header `x-cron-secret: <same value>`.
-
-`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are usually injected for Edge Functions automatically.
-
-**Invoke manually (POST):**
-
-```bash
-curl -X POST "https://<project-ref>.supabase.co/functions/v1/sync-bet-settlements" \
-  -H "x-cron-secret: YOUR_CRON_SECRET"
-```
-
-**Schedule:** Use Supabase **pg_net** + **pg_cron**, GitHub Actions, or another cron to POST every 15–30 minutes during game windows. Respect balldontlie rate limits on your plan.
-
-**Behavior notes:** Matching uses `game_date` and `team` / `opponent` (abbreviations like `BOS` / `LAL` work best). Wrong or ambiguous matches produce `auto_settle_error` until you fix team text or set **Stats API player id** / **game id** on the bet. Moneyline, spread, and game totals are **not** auto-graded. Settlement rules are simple numeric O/U (not book-specific void/half rules).
-
-**Shared logic:** `src/utils/propSettlement.ts` mirrors the Edge Function grading rules; keep them aligned if you change one.
-
-### Edge Function `nba-odds-slate` (Bet Intelligence → Load top 5 from odds)
-
-Fills the **Top Picks** slate with up to **5** NBA player props (points, rebounds, assists) ranked by **devigged implied probability** on the favorite side of each line (median prices across US books returned by The Odds API). This is **not** a win guarantee—only “what the board prices imply.”
-
-**Deploy** (keep JWT verification enabled so only signed-in users can call it):
-
-```bash
-supabase functions deploy nba-odds-slate
-```
-
-**Secrets** (Dashboard → Edge Functions → Secrets, or CLI):
-
-- `THE_ODDS_API_KEY` — [The Odds API](https://the-odds-api.com/) key (query parameter on their requests).
-- `BALLDONTLIE_API_KEY` — [balldontlie](https://www.balldontlie.io/) key (`Authorization` header).
-
-Do **not** put these keys in the Vite app or commit them. If a key is ever pasted into chat or checked into git, **rotate it** at the provider.
-
-**Cost discipline:** One button click uses **one** Odds API request (`player_points`, `player_rebounds`, `player_assists`, `regions=us`) plus a small number of balldontlie calls (teams + player search per candidate). The UI enforces a **90 second** cooldown between loads.
-
-**Client:** `src/lib/nbaOddsSlateService.ts` invokes the function; **Bet Intelligence** → **Load top 5 from odds**.
-
-**Troubleshooting — toast says it could not reach Edge Functions / “Failed to send a request”:** That is a **browser network** failure (no HTTP response from Supabase). Check `VITE_SUPABASE_URL` in `.env` is exactly `https://<project-ref>.supabase.co`, reload the dev server after edits, try another network or disable ad blockers, and confirm the function is deployed. If you see **HTTP 404** instead, deploy `nba-odds-slate`. If **HTTP 401**, sign out and back in.
-
-**“Edge Function returned a non-2xx status code”:** The request reached Supabase; the function responded with an error. After updating the app, the toast should show **HTTP code + a short reason**. Typical fixes: **404** — `VITE_SUPABASE_URL` points at a **different** project than where `nba-odds-slate` was deployed; align the URL ref with **Dashboard → Edge Functions** (same project). **401** — sign in again; same Supabase project in `.env` as where you deployed. **500** — set secrets `THE_ODDS_API_KEY` and `BALLDONTLIE_API_KEY` (Dashboard → Edge Functions → Secrets). **502** — Odds API key or quota issue. Check **Edge Functions → nba-odds-slate → Logs** for the full stack trace.
-
-**Production-only 401 Invalid JWT (Vercel checklist):**
-
-1. In Vercel project settings, verify **Environment Variables** for the **Production** environment:
-   - `VITE_SUPABASE_URL` must be `https://xswtikkyszzqtgdytlkk.supabase.co`
-   - `VITE_SUPABASE_ANON_KEY` must be from the same Supabase project (`ref: xswtikkyszzqtgdytlkk` in JWT payload)
-2. Ensure the same values are not accidentally different in Preview vs Production for the currently served domain.
-3. Trigger a fresh Production redeploy after env edits (Vercel does not retroactively update old builds).
-4. In browser DevTools on the production domain, clear site data (or remove `localStorage` keys starting with `sb-`), then sign in again.
-5. Confirm `nba-odds-slate` is deployed in project `xswtikkyszzqtgdytlkk` in Supabase Dashboard.
-
-## Manual Live Tracking and Future API Integration
-
-The MVP works with manual live updates from the dashboard. Future provider integration is designed around:
-
-- `src/lib/liveDataProvider.ts`
-
-Replace `ManualLiveDataProvider` with an API-backed implementation later.
-
-## Export Support
-
-- CSV export: all or filtered bets.
-- XLSX export: all or filtered bets.
-- Export columns include key bet details and computed net profit/loss.
-
-## Deployment to Vercel
-
-1. Push repository to Git provider.
-2. Import project in Vercel.
-3. Set build settings (Vite defaults are usually auto-detected):
-   - Build command: `npm run build`
-   - Output directory: `dist`
-4. Add environment variables in Vercel project settings:
+1. Push the repo to GitHub (or GitLab/Bitbucket).
+2. Import the project in [Vercel](https://vercel.com).
+3. Build settings (usually auto-detected):
+   - **Build command:** `npm run build`
+   - **Output directory:** `dist`
+4. Set environment variables (Production + Preview as needed):
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
+   - `YOUTUBE_DATA_API_KEY`
+   - `SUPABASE_URL`
+   - `SUPABASE_SERVICE_ROLE_KEY`
 5. Deploy.
-6. If auth worked before but now fails with `Invalid JWT`, re-check variable values in the **Production** scope specifically and redeploy.
+
+`vercel.json` rewrites all non-API paths to `index.html` for client-side routing, while `/api/*` hits serverless functions.
 
 ### Post-deploy checklist
 
-- Confirm login/signup flow works.
-- Confirm bets CRUD works under RLS.
-- Confirm charts render with real data.
-- Confirm CSV and XLSX downloads.
+- [ ] Sign up / log in works
+- [ ] Create, edit, delete bets under RLS
+- [ ] Charts render with real data
+- [ ] CSV / XLSX export downloads
+- [ ] Highlight Hub loads (after `YOUTUBE_DATA_API_KEY` is set)
+- [ ] Keepalive workflow runs (see below)
+
+---
+
+## Serverless API routes
+
+### `GET /api/keepalive`
+
+- **File:** `api/keepalive.ts`
+- **Purpose:** Lightweight Supabase query (`select id from bets limit 1`) to keep the database connection path warm
+- **Auth:** None (public ping; returns no sensitive row data)
+- **Env:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+
+### `GET /api/youtube-highlights`
+
+- **File:** `api/youtube-highlights.ts`
+- **Purpose:** Fetch recent highlight videos from the official @NBA YouTube channel
+- **Auth:** None for read; API key stays server-side
+- **Env:** `YOUTUBE_DATA_API_KEY`, optional `YOUTUBE_NBA_CHANNEL_ID`
+
+---
+
+## Supabase Edge Functions
+
+### `nba-odds-slate`
+
+Powers **Bet Intelligence → Load top 5 from odds**.
+
+- One Odds API request (player points/rebounds/assists, US region)
+- Ranks lines by devigged implied probability
+- Returns up to 5 scenarios for the Top Picks scanner
+
+**Secrets:** `THE_ODDS_API_KEY`, `BALLDONTLIE_API_KEY`
+
+```bash
+npx supabase functions deploy nba-odds-slate
+```
+
+Requires a signed-in user (JWT). See [Bet Intelligence troubleshooting](#bet-intelligence--how-it-works-and-why-it-often-fails).
+
+### `sync-bet-settlements`
+
+Auto-grades pending bets with `auto_settle_enabled` using balldontlie box scores.
+
+**Secrets:** `BALLDONTLIE_API_KEY`, optional `CRON_SECRET`
+
+```bash
+npx supabase functions deploy sync-bet-settlements --no-verify-jwt
+```
+
+Invoke on a schedule (GitHub Actions, pg_cron, etc.) during game windows. Moneyline, spread, and game totals are **not** auto-graded.
+
+---
+
+## Keep-alive system
+
+Inactive free-tier projects can pause. CourtLedger includes a weekly ping:
+
+1. **GitHub Actions** — `.github/workflows/keepalive.yml`
+   - Cron: Mondays 09:00 UTC
+   - Manual trigger: `workflow_dispatch`
+   - Calls your deployed endpoint with `curl --fail`
+
+2. **Vercel endpoint** — `/api/keepalive` runs a minimal Supabase query.
+
+**Before enabling:** Edit `.github/workflows/keepalive.yml` and replace `YOUR-APP-NAME` with your real Vercel hostname (e.g. `court-ledger`).
+
+Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in Vercel for the keepalive function.
+
+---
+
+## Bet Intelligence — how it works and why it often fails
+
+This section is important: **Bet Intelligence is not powered by AI.** There is no OpenAI, no LLM, and no machine-learning model in this codebase. The name refers to a **structured, rule-based analysis engine** that runs entirely in the browser.
+
+### What Bet Intelligence actually is
+
+| Piece | Location | What it does |
+|-------|----------|--------------|
+| Manual scenario form | `BetIntelligencePanel` | You enter player, line, odds, notes |
+| Analysis engine | `src/lib/betIntelligenceEngine.ts` | Deterministic projection, edge score, trap detection, simulation bands |
+| Sub-engines | `projectionEngine`, `lineMovement`, `edgeScoring`, `simulationEngine`, `riskAssessment` | Heuristics over your **manual** inputs |
+| Report UI | `AnalysisResultCard` | Structured verdict (Bet / Lean / Pass) |
+| Top Picks scanner | `TopPicksToday` | Runs the same engine over multiple scenarios |
+| Live odds loader | `nbaOddsSlateService` → Edge Function `nba-odds-slate` | Optional: pull real board lines from The Odds API |
+| Report persistence | `bet_intelligence_reports` table | Save/load analysis history |
+| Data provider stub | `intelligenceDataProvider.ts` | **Not implemented** — no live injuries, stats, or lineups feed |
+
+```mermaid
+flowchart LR
+  ManualInput[Manual form inputs] --> Engine[betIntelligenceEngine]
+  Engine --> Report[Analysis report]
+  OddsButton[Load top 5 from odds] --> EdgeFn[nba-odds-slate Edge Function]
+  EdgeFn --> Scenarios[Scenario rows]
+  Scenarios --> Engine
+  LiveFeeds[Live stats / injuries / AI] -.->|not wired| Engine
+```
+
+### What works today
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Analyze Bet** (manual form) | Works offline | Fill player, team, line, odds, optional notes → click Analyze |
+| **Load samples** | Works | Demo scenarios in `sampleBetIntelligence.ts` |
+| **Save report** | Works if migrated | Requires `bet_intelligence_reports` migration |
+| **Add to tracker** | Works | Creates a pending bet from analysis or top pick |
+| **Report history** | Works if migrated | Loads from Supabase per user |
+
+### What is broken or unreliable
+
+| Feature | Typical failure | Root cause |
+|---------|-----------------|------------|
+| **Load top 5 from odds** | `Could not reach Supabase Edge Functions` | Browser never gets a response — ad blocker, VPN, corporate firewall, or wrong `VITE_SUPABASE_URL` |
+| **Load top 5 from odds** | `HTTP 401 Invalid JWT` | Production env mismatch: `VITE_SUPABASE_ANON_KEY` / URL not from the same Supabase project where `nba-odds-slate` is deployed; stale session in `localStorage` |
+| **Load top 5 from odds** | `HTTP 404` | Edge Function not deployed, or frontend points at a different Supabase project ref |
+| **Load top 5 from odds** | `HTTP 500` / `502` | Missing Edge Function secrets (`THE_ODDS_API_KEY`, `BALLDONTLIE_API_KEY`) or Odds API quota exhausted |
+| **Load top 5 from odds** | Empty results | Off-season, no US player prop markets listed, or books not returning P/R/A markets |
+| **Top Picks list empty** | "No picks cleared the quality bar" | Engine filters aggressively (edge ≥ 6, no trap flag, verdict Bet/Lean). Thin or sample data often fails the bar — **this is by design**, not a crash |
+| **Expecting "AI picks"** | Disappointing / "doesn't work" | **There is no AI.** Outputs are conservative heuristics from manual text fields, not predictive models |
+| **Live injury / stats context** | Always generic reasons | `intelligenceDataProvider` is a no-op stub; no API enriches scenarios automatically |
+
+### Why people think "the AI doesn't work"
+
+1. **Naming mismatch** — The UI says "Intelligence" but the system is rule-based math + text heuristics, not generative AI or ML.
+2. **Live odds path is fragile** — It depends on Supabase Edge Functions, JWT auth, third-party API keys, and browser network access to `*.supabase.co`. Any link in that chain breaks the button.
+3. **Production env drift** — Vite embeds Supabase URL/key at build time. If Vercel Production is missing `VITE_SUPABASE_ANON_KEY` or uses a key from a different project, every Edge Function invoke returns 401 even when local dev works.
+4. **Gateway JWT vs in-function auth** — Supabase's Edge Function gateway validates JWTs before your code runs. Misaligned keys or expired sessions surface as `Invalid JWT` before the function logic executes.
+5. **No live data pipeline** — Without injuries, minutes, pace, and form APIs wired in, projections default to conservative baselines; reports look generic or always "Pass."
+6. **Strict pick filtering** — Even when odds load successfully, the Top Picks scanner may show zero cards because scenarios fail quality thresholds.
+
+### Workarounds that work right now
+
+1. Use **Analyze Bet** with manual inputs (player, line, opening line, recent form text, injury notes).
+2. Click **Load samples** instead of **Load top 5 from odds** to populate the slate scanner offline.
+3. If odds load fails, the app falls back to sample scenarios automatically (see `TopPicksToday.tsx`).
+4. For live odds, verify the full chain:
+   - Same Supabase project ref in `.env`, Vercel Production, and Edge Function deploy target
+   - `nba-odds-slate` deployed with secrets set
+   - Sign out, clear site data, sign in again
+   - Disable ad blockers for your app domain and `*.supabase.co`
+   - Check **Supabase → Edge Functions → nba-odds-slate → Logs**
+
+### Bet Intelligence code map
+
+```
+src/types/betIntelligence.ts          Types
+src/lib/betIntelligenceEngine.ts      Main engine (NOT AI)
+src/lib/projectionEngine.ts           Projection heuristics
+src/lib/lineMovement.ts               Opening vs current line
+src/lib/edgeScoring.ts                Edge score + calibrated probability
+src/lib/simulationEngine.ts           Variance bands (not Monte Carlo live sim)
+src/lib/riskAssessment.ts             Risk flags
+src/lib/betIntelligenceService.ts     Supabase report CRUD
+src/lib/nbaOddsSlateService.ts        Edge Function client + error mapping
+src/hooks/useIntelligenceReports.ts   Report history hook
+src/components/intelligence/*         UI
+src/pages/BetIntelligencePage.tsx     Page shell
+src/data/sampleBetIntelligence.ts     Offline demo scenarios
+supabase/functions/nba-odds-slate/    Live odds Edge Function
+```
+
+### Production 401 checklist (Vercel + Supabase)
+
+1. Vercel **Production** env:
+   - `VITE_SUPABASE_URL` = `https://YOUR_PROJECT_REF.supabase.co`
+   - `VITE_SUPABASE_ANON_KEY` = anon key from **that same project**
+2. Redeploy after any env change (old builds keep old values).
+3. Clear browser site data / `localStorage` keys starting with `sb-`, then sign in again.
+4. Confirm `nba-odds-slate` is deployed in the same Supabase project as the URL ref.
+5. Confirm Edge Function secrets: `THE_ODDS_API_KEY`, `BALLDONTLIE_API_KEY`.
+
+---
+
+## Highlight Hub
+
+**Route:** `/live` (sidebar: **Highlight Hub**)
+
+Embeds recent highlight uploads from the official @NBA YouTube channel (`UCWJ2lWNubArHWmf3FIHbfcQ` by default).
+
+- **Client:** `src/pages/LiveCenterPage.tsx`, `src/lib/youtubeHighlightsService.ts`
+- **Server:** `api/youtube-highlights.ts`
+- **Env:** `YOUTUBE_DATA_API_KEY` in Vercel (server-side only)
+
+The YouTube API key must never be committed or exposed via `VITE_*` variables.
+
+---
 
 ## Scripts
 
-- `npm run dev` - run local dev server
-- `npm run build` - production build
-- `npm run preview` - preview production build locally
-- `npm run lint` - run lint checks
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Vite dev server |
+| `npm run build` | Typecheck + production build → `dist/` |
+| `npm run preview` | Preview production build locally |
+| `npm run lint` | ESLint |
+| `npm run sb:login` | Supabase CLI login |
+| `npm run sb:link` | Link local repo to Supabase project |
+| `npm run sb:deploy:odds` | Deploy `nba-odds-slate` |
+| `npm run sb:deploy:settle` | Deploy `sync-bet-settlements` |
+
+---
+
+## Security notes
+
+- **Never commit** `.env`, service role keys, or third-party API keys.
+- **Rotate keys** immediately if they are pasted in chat, logged, or checked into git.
+- **Service role key** is only for server routes (`keepalive`) — never import it in `src/`.
+- **Anon key** is safe for the browser but must pair with RLS policies on every table.
+- **Edge Function secrets** (`THE_ODDS_API_KEY`, `BALLDONTLIE_API_KEY`) live in Supabase Dashboard only.
+
+---
+
+## License
+
+Private project — see repository owner for usage terms.

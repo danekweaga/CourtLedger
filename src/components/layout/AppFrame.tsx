@@ -15,7 +15,7 @@ interface AppFrameProps {
 const navItems = [
   { key: "command", label: "Command Center", icon: "dashboard", to: "/" },
   { key: "history", label: "Bet History", icon: "receipt_long", to: "/history" },
-  { key: "live", label: "Live Center", icon: "live_tv", to: "/live" },
+  { key: "live", label: "Highlight Hub", icon: "play_circle", to: "/live" },
   { key: "markets", label: "Market Intelligence", icon: "query_stats", to: "/markets" },
   { key: "analytics", label: "ROI Analytics", icon: "payments", to: "/analytics" },
   { key: "intelligence", label: "Bet Intelligence", icon: "psychology", to: "/intelligence" },
@@ -82,7 +82,7 @@ export function AppFrame({ session, title, subtitle, activeNav, onAddBet, onSign
             History
           </NavLink>
           <NavLink className="hidden text-sm text-slate-400 hover:text-slate-200 md:block" to="/live">
-            Live
+            Highlights
           </NavLink>
           <NavLink className="hidden text-sm text-slate-400 hover:text-slate-200 md:block" to="/markets">
             Markets
@@ -106,7 +106,7 @@ export function AppFrame({ session, title, subtitle, activeNav, onAddBet, onSign
       <nav className="fixed bottom-0 left-0 z-50 flex w-full items-center justify-around rounded-t-3xl bg-slate-950/80 px-4 pb-6 pt-3 shadow-[0_-8px_30px_rgb(6,14,32,0.5)] backdrop-blur-2xl lg:hidden">
         <MobileItem to="/analytics" icon="analytics" label="Stats" active={activeNav === "analytics"} />
         <MobileItem to="/history" icon="history" label="History" active={activeNav === "history"} />
-        <MobileItem to="/live" icon="live_tv" label="Live" active={activeNav === "live"} />
+        <MobileItem to="/live" icon="play_circle" label="Highlights" active={activeNav === "live"} />
         <MobileItem to="/intelligence" icon="psychology" label="Intel" active={activeNav === "intelligence"} />
         <MobileItem to="/settings" icon="settings" label="Settings" active={activeNav === "settings"} />
         <button

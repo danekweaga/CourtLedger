@@ -39,7 +39,7 @@ function CourtLedgerApp({ session }: { session: Session }) {
       return { title: "Market Intelligence", subtitle: "Market heatmap, volume and tactical outlook", active: "markets" as const };
     }
     if (location.pathname === "/live") {
-      return { title: "Live Center", subtitle: "Stream panel and live stat tracking", active: "live" as const };
+      return { title: "Highlight Hub", subtitle: "Recent official NBA highlights", active: "live" as const };
     }
     if (location.pathname === "/history") {
       return { title: "Bet History", subtitle: "Ledger, outcomes and tactical audit trail", active: "history" as const };
@@ -133,17 +133,7 @@ function CourtLedgerApp({ session }: { session: Session }) {
           }
         />
         <Route path="/markets" element={<MarketIntelligencePage bets={data.bets} />} />
-        <Route
-          path="/live"
-          element={
-            <LiveCenterPage
-              activeBets={data.activeBets}
-              selectedStreamBet={data.selectedStreamBet}
-              onSelectStream={data.setSelectedStreamBet}
-              onManualLiveUpdate={(bet, value) => void data.updateLiveStat(bet, value)}
-            />
-          }
-        />
+        <Route path="/live" element={<LiveCenterPage />} />
         <Route
           path="/history"
           element={

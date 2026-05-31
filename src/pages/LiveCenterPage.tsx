@@ -1,129 +1,145 @@
-import { useState } from "react";
-import type { Bet } from "../types/bets";
-import { StreamPanel } from "../components/stream/StreamPanel";
-import { isValidHttpUrl, normalizeHttpUrl } from "../utils/url";
+import { useCallback, useEffect, useState } from "react";
+import {
+  fetchNbaHighlights,
+  highlightEmbedUrl,
+  highlightWatchUrl,
+  type HighlightVideo,
+} from "../lib/youtubeHighlightsService";
 
-interface LiveCenterPageProps {
-  activeBets: Bet[];
-  selectedStreamBet: Bet | null;
-  onSelectStream: (bet: Bet | null) => void;
-  onManualLiveUpdate: (bet: Bet, value: number) => void;
-}
+export function LiveCenterPage() {
+  const [highlights, setHighlights] = useState<HighlightVideo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-export function LiveCenterPage({
-  activeBets,
-  selectedStreamBet,
-  onSelectStream,
-  onManualLiveUpdate,
-}: LiveCenterPageProps) {
-  const [draftUpdates, setDraftUpdates] = useState<Record<string, string>>({});
+  const loadHighlights = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const items = await fetchNbaHighlights();
+      setHighlights(items);
+    } catch (e) {
+      setHighlights([]);
+      setError(e instanceof Error ? e.message : "Could not load highlights.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadHighlights();
+  }, [loadHighlights]);
 
   return (
-    <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
-      <section className="space-y-4 lg:col-span-7">
-        <header>
-          <h3 className="font-headline text-2xl font-bold">Live Center</h3>
-          <p className="text-sm text-on-surface-variant">
-            Add stream links and update stats manually now. Auto live scores can be plugged in later through `liveDataProvider`.
+    <div className="space-y-8 pb-10">
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-rose-400/90">NBA · Official clips</p>
+          <h1 className="font-headline text-3xl font-extrabold text-white md:text-4xl">Highlight Hub</h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-400">
+            Recent highlight uploads from the official NBA YouTube channel. Refresh to pull the latest clips.
           </p>
-        </header>
+        </div>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => void loadHighlights()}
+          className="rounded-xl bg-rose-500/20 px-4 py-2 text-sm font-bold text-rose-200 ring-1 ring-rose-500/35 hover:bg-rose-500/30 disabled:opacity-50"
+        >
+          {loading ? "Loading…" : "Refresh highlights"}
+        </button>
+      </header>
 
-        {activeBets.length === 0 ? (
-          <div className="rounded-xl border border-outline-variant/20 bg-surface-container p-6 text-sm text-on-surface-variant">
-            No active bets to track right now.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {activeBets.map((bet) => (
-              <article key={bet.id} className="rounded-xl border border-outline-variant/15 bg-surface-container p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-bold text-on-surface">{bet.player_name || bet.matchup}</p>
-                    <p className="text-xs text-on-surface-variant">
-                      {bet.matchup} · {bet.market_type.replaceAll("_", " ")} · {bet.over_under ?? ""} {bet.line ?? "-"}
-                    </p>
-                    <p className="text-xs text-on-surface-variant">
-                      Current: {bet.current_stat_value ?? "-"} · Remaining: {bet.target_remaining ?? "-"} · {bet.game_status ?? "Live"}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {isValidHttpUrl(bet.stream_url) ? (
-                      <>
-                        <button
-                          type="button"
-                          className="rounded-lg bg-surface-container-high px-3 py-2 text-xs font-semibold text-on-surface"
-                          onClick={() => onSelectStream(bet)}
-                        >
-                          View In Panel
-                        </button>
-                        <a
-                          href={normalizeHttpUrl(bet.stream_url)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-lg bg-surface-container-high px-3 py-2 text-xs font-semibold text-on-surface"
-                        >
-                          Open Stream Link
-                        </a>
-                      </>
-                    ) : (
-                      <span className="rounded-lg bg-surface-container-high px-3 py-2 text-xs text-rose-300">
-                        No valid stream URL saved for this bet
-                      </span>
-                    )}
-                    {isValidHttpUrl(bet.stat_source_url) ? (
-                      <a
-                        href={normalizeHttpUrl(bet.stat_source_url)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="rounded-lg bg-surface-container-high px-3 py-2 text-xs font-semibold text-on-surface"
-                      >
-                        Open Stat Source
-                      </a>
-                    ) : null}
-                  </div>
-                </div>
+      {loading && highlights.length === 0 ? (
+        <LoadingState />
+      ) : error ? (
+        <ErrorState message={error} onRetry={() => void loadHighlights()} />
+      ) : highlights.length === 0 ? (
+        <EmptyState onRetry={() => void loadHighlights()} />
+      ) : (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {highlights.map((clip) => (
+            <HighlightCard key={clip.videoId} clip={clip} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <input
-                    className="w-40 rounded-lg border-none bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ring-1 ring-transparent placeholder:text-on-surface-variant focus:ring-primary/40"
-                    type="number"
-                    step="0.1"
-                    placeholder="Live stat value"
-                    value={draftUpdates[bet.id] ?? ""}
-                    onChange={(event) =>
-                      setDraftUpdates((prev) => ({
-                        ...prev,
-                        [bet.id]: event.target.value,
-                      }))
-                    }
-                  />
-                  <button
-                    type="button"
-                    className="rounded-lg bg-primary px-3 py-2 text-xs font-bold text-[#002109]"
-                    onClick={() => {
-                      const nextValue = Number(draftUpdates[bet.id]);
-                      if (Number.isFinite(nextValue)) {
-                        onManualLiveUpdate(bet, nextValue);
-                      }
-                    }}
-                  >
-                    Save Live Update
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+function HighlightCard({ clip }: { clip: HighlightVideo }) {
+  const published = new Date(clip.publishedAt).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 
-      <section className="lg:col-span-5">
-        <StreamPanel selectedBet={selectedStreamBet} onClose={() => onSelectStream(null)} />
-        {!selectedStreamBet ? (
-          <div className="rounded-xl border border-outline-variant/20 bg-surface-container p-6 text-sm text-on-surface-variant">
-            Pick an active bet with a stream URL to view the embedded stream panel here.
-          </div>
-        ) : null}
-      </section>
+  return (
+    <article className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/50 shadow-xl">
+      <div className="aspect-video w-full bg-black">
+        <iframe
+          className="h-full w-full"
+          src={highlightEmbedUrl(clip.videoId)}
+          title={clip.title}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+          loading="lazy"
+          referrerPolicy="strict-origin-when-cross-origin"
+        />
+      </div>
+      <div className="space-y-2 p-4">
+        <h2 className="font-headline text-base font-bold leading-snug text-white">{clip.title}</h2>
+        <p className="text-xs text-slate-500">
+          {clip.channelTitle} · {published}
+        </p>
+        <a
+          href={highlightWatchUrl(clip.videoId)}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex text-xs font-semibold text-rose-300 hover:underline"
+        >
+          Open on YouTube
+        </a>
+      </div>
+    </article>
+  );
+}
+
+function LoadingState() {
+  return (
+    <div className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-700 bg-slate-950/30 p-8 text-center">
+      <span className="material-symbols-outlined animate-pulse text-4xl text-slate-600">play_circle</span>
+      <p className="mt-4 font-headline text-lg font-bold text-slate-400">Loading highlights…</p>
+    </div>
+  );
+}
+
+function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-6 text-center">
+      <p className="font-headline text-lg font-bold text-rose-200">Could not load highlights</p>
+      <p className="mt-2 text-sm text-slate-400">{message}</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-4 rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-slate-200 hover:bg-slate-700"
+      >
+        Try again
+      </button>
+    </div>
+  );
+}
+
+function EmptyState({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/30 p-8 text-center">
+      <p className="font-headline text-lg font-bold text-slate-400">No highlights found</p>
+      <p className="mt-2 text-sm text-slate-500">The official NBA channel may not have recent highlight uploads right now.</p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-4 rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-slate-200 hover:bg-slate-700"
+      >
+        Refresh
+      </button>
     </div>
   );
 }

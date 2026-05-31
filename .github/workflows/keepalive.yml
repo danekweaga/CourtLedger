@@ -1,0 +1,15 @@
+name: Weekly Keepalive
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+jobs:
+  ping-keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Vercel keepalive endpoint
+        run: |
+          curl --fail --silent --show-error --location --max-time 30 \
+            "https://YOUR-APP-NAME.vercel.app/api/keepalive"
