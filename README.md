@@ -1,6 +1,6 @@
 # CourtLedger
 
-CourtLedger is a full-stack **NBA betting tracker and analytics dashboard**. It helps you log props and game bets, track active positions, grade outcomes, visualize ROI, export your ledger, and explore optional tooling around props analysis and highlights.
+CourtLedger is a full-stack **NBA betting tracker and analytics dashboard**. It helps you log props and game bets, track active positions, grade outcomes, visualize ROI, export your ledger, and watch official NBA highlights.
 
 **Live app:** [https://court-ledger.vercel.app](https://court-ledger.vercel.app)
 
@@ -20,10 +20,9 @@ CourtLedger is a full-stack **NBA betting tracker and analytics dashboard**. It 
 10. [Serverless API routes](#serverless-api-routes)
 11. [Supabase Edge Functions](#supabase-edge-functions)
 12. [Keep-alive system](#keep-alive-system)
-13. [Bet Intelligence — how it works and why it often fails](#bet-intelligence--how-it-works-and-why-it-often-fails)
-14. [Highlight Hub](#highlight-hub)
-15. [Scripts](#scripts)
-16. [Security notes](#security-notes)
+13. [Highlight Hub](#highlight-hub)
+14. [Scripts](#scripts)
+15. [Security notes](#security-notes)
 
 ---
 
@@ -37,7 +36,6 @@ CourtLedger is **not** a sportsbook. It is a personal command center for:
 - Analytics charts (profit over time, by market, by book)
 - CSV / XLSX export
 - Optional auto-settlement for supported NBA player props via balldontlie
-- Optional structured prop analysis (Bet Intelligence)
 - Embedded official NBA YouTube highlights (Highlight Hub)
 
 Authentication is handled by **Supabase Auth**. All bet data is scoped per user with **Row Level Security (RLS)**.
@@ -63,13 +61,11 @@ flowchart TB
   subgraph supabase [Supabase]
     Auth[Auth]
     DB[(PostgreSQL)]
-    EdgeOdds[nba-odds-slate]
     EdgeSettle[sync-bet-settlements]
   end
 
   subgraph external [External APIs]
     YouTube[YouTube Data API]
-    OddsAPI[The Odds API]
     BDL[balldontlie]
   end
 
@@ -77,11 +73,8 @@ flowchart TB
   Pages --> ApiHighlights
   ClientSupabase --> Auth
   ClientSupabase --> DB
-  ClientSupabase --> EdgeOdds
   ApiKeepalive --> DB
   ApiHighlights --> YouTube
-  EdgeOdds --> OddsAPI
-  EdgeOdds --> BDL
   EdgeSettle --> BDL
   EdgeSettle --> DB
 ```
@@ -89,9 +82,9 @@ flowchart TB
 | Layer | Role |
 |-------|------|
 | **React + Vite** | Single-page app, client routing, UI |
-| **Supabase client** | Auth, CRUD on `bets`, intelligence report history |
+| **Supabase client** | Auth, CRUD on `bets` |
 | **Vercel serverless** | Server-only secrets (YouTube, Supabase service role for keepalive) |
-| **Supabase Edge Functions** | Odds slate fetch, auto-settlement cron target |
+| **Supabase Edge Functions** | Auto-settlement cron target |
 | **GitHub Actions** | Weekly ping to keep Vercel + Supabase warm |
 
 ---
@@ -105,7 +98,6 @@ flowchart TB
 | `/live` | Highlight Hub | Embedded recent official NBA YouTube highlights |
 | `/markets` | Market Intelligence | Market-level views from your bet data |
 | `/analytics` | ROI Analytics | Charts and performance metrics |
-| `/intelligence` | Bet Intelligence | Manual prop analysis + optional live odds slate |
 | `/settings` | Settings | Account preferences |
 
 **Core betting features**
@@ -144,9 +136,9 @@ CourtLedger/
 │   └── supabaseAdmin.ts          # Server-only Supabase client (service role)
 ├── src/
 │   ├── pages/                    # Route-level pages
-│   ├── components/               # UI by domain (bets, auth, intelligence, …)
-│   ├── hooks/                    # useCourtLedgerData, useIntelligenceReports
-│   ├── lib/                      # Services (bets, auth, intelligence engine, …)
+│   ├── components/               # UI by domain (bets, auth, layout, …)
+│   ├── hooks/                    # useCourtLedgerData
+│   ├── lib/                      # Services (bets, auth, highlights, …)
 │   ├── types/                    # TypeScript models
 │   └── utils/                    # Grading, export, filtering, etc.
 ├── supabase/
@@ -212,12 +204,11 @@ The CLI is in `devDependencies`. From the project root:
 npx supabase login
 npx supabase link --project-ref YOUR_PROJECT_REF
 npx supabase db push
-npx supabase secrets set THE_ODDS_API_KEY=your_key BALLDONTLIE_API_KEY=your_key
-npx supabase functions deploy nba-odds-slate
+npx supabase secrets set BALLDONTLIE_API_KEY=your_key
 npx supabase functions deploy sync-bet-settlements --no-verify-jwt
 ```
 
-Or use npm scripts: `npm run sb:login`, `npm run sb:link`, `npm run sb:deploy:odds`, `npm run sb:deploy:settle`.
+Or use npm scripts: `npm run sb:login`, `npm run sb:link`, `npm run sb:deploy:settle`.
 
 ---
 
@@ -252,7 +243,6 @@ These are baked into the build at deploy time. Changing them in Vercel requires 
 - `profiles` — user profile rows
 - `bets` — main betting ledger
 - `live_stats_cache` — reserved for future live data
-- `bet_intelligence_reports` — saved intelligence reports (requires migration)
 
 All tables should use RLS so users only access their own `user_id` rows.
 
@@ -262,7 +252,6 @@ Run in Supabase **SQL Editor** or via `supabase db push`:
 
 | File | Purpose |
 |------|---------|
-| `supabase/migrations/20260330120000_bet_intelligence_reports.sql` | Intelligence report history |
 | `supabase/migrations/20260330140000_bets_auto_settle.sql` | Auto-settle columns on `bets` |
 
 The app uses **column pruning** on insert/update, so older schemas still load until you migrate.
@@ -287,10 +276,7 @@ Command Center bet form includes **Auto-settle** and optional stats API IDs. Gra
    - `VITE_SUPABASE_ANON_KEY`
    - `YOUTUBE_DATA_API_KEY`
    - `SUPABASE_URL`
-   - `SUPABASE_ANON_KEY` (server JWT validation for odds/player APIs)
    - `SUPABASE_SERVICE_ROLE_KEY`
-   - `THE_ODDS_API_KEY`
-   - `BALLDONTLIE_API_KEY`
 5. Deploy.
 
 `vercel.json` rewrites all non-API paths to `index.html` for client-side routing, while `/api/*` hits serverless functions.
@@ -302,7 +288,6 @@ Command Center bet form includes **Auto-settle** and optional stats API IDs. Gra
 - [ ] Charts render with real data
 - [ ] CSV / XLSX export downloads
 - [ ] Highlight Hub loads (after `YOUTUBE_DATA_API_KEY` is set)
-- [ ] Prop Analyzer → Load top 5 from odds works (after `THE_ODDS_API_KEY` + `BALLDONTLIE_API_KEY` set)
 
 ---
 
@@ -322,33 +307,9 @@ Command Center bet form includes **Auto-settle** and optional stats API IDs. Gra
 - **Auth:** None for read; API key stays server-side
 - **Env:** `YOUTUBE_DATA_API_KEY`, optional `YOUTUBE_NBA_CHANNEL_ID`
 
-### `POST /api/nba-odds-slate`
-
-- **File:** `api/nba-odds-slate.ts`
-- **Purpose:** Load top 5 NBA player prop scenarios from The Odds API + balldontlie
-- **Auth:** Requires `Authorization: Bearer <supabase_user_jwt>`
-- **Env:** `THE_ODDS_API_KEY`, `BALLDONTLIE_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
-- **Client:** `src/lib/nbaOddsSlateService.ts`
-
-### `POST /api/player-context`
-
-- **File:** `api/player-context.ts`
-- **Purpose:** Enrich a scenario with season/recent stats from balldontlie
-- **Auth:** Requires `Authorization: Bearer <supabase_user_jwt>`
-- **Env:** `BALLDONTLIE_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
-- **Client:** `src/lib/playerContextService.ts`
-
 ---
 
 ## Supabase Edge Functions
-
-### `nba-odds-slate` (legacy — optional)
-
-Supabase Edge Function version of the odds slate loader. **Production now uses `/api/nba-odds-slate` on Vercel** instead, to avoid gateway JWT issues. You can leave this undeployed unless you want a Supabase-only fallback.
-
-```bash
-npx supabase functions deploy nba-odds-slate
-```
 
 ### `sync-bet-settlements`
 
@@ -381,109 +342,6 @@ Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in Vercel for the keepalive f
 
 ---
 
-## Bet Intelligence — how it works and why it often fails
-
-This section is important: **Bet Intelligence is not powered by AI.** There is no OpenAI, no LLM, and no machine-learning model in this codebase. The name refers to a **structured, rule-based analysis engine** that runs entirely in the browser.
-
-### What Bet Intelligence actually is
-
-| Piece | Location | What it does |
-|-------|----------|--------------|
-| Manual scenario form | `BetIntelligencePanel` | You enter player, line, odds, notes |
-| Analysis engine | `src/lib/betIntelligenceEngine.ts` | Deterministic projection, edge score, trap detection, simulation bands |
-| Sub-engines | `projectionEngine`, `lineMovement`, `edgeScoring`, `simulationEngine`, `riskAssessment` | Heuristics over your **manual** inputs |
-| Report UI | `AnalysisResultCard` | Structured verdict (Bet / Lean / Pass) |
-| Top Picks scanner | `TopPicksToday` | Runs the same engine over multiple scenarios |
-| Live odds loader | `nbaOddsSlateService` → `/api/nba-odds-slate` (Vercel) | Pull real board lines from The Odds API |
-| Stats enrichment | `playerContextService` → `/api/player-context` (Vercel) | balldontlie season/recent form |
-| Report persistence | `bet_intelligence_reports` table | Save/load analysis history |
-| Data provider stub | `intelligenceDataProvider.ts` | **Not implemented** — no live injuries, stats, or lineups feed |
-
-```mermaid
-flowchart LR
-  ManualInput[Manual form inputs] --> Engine[betIntelligenceEngine]
-  Engine --> Report[Analysis report]
-  OddsButton[Load top 5 from odds] --> VercelApi[/api/nba-odds-slate]
-  VercelApi --> OddsAPI[The Odds API]
-  Scenarios --> Engine
-  LiveFeeds[Live stats / injuries / AI] -.->|not wired| Engine
-```
-
-### What works today
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| **Analyze Bet** (manual form) | Works offline | Fill player, team, line, odds, optional notes → click Analyze |
-| **Load samples** | Works | Demo scenarios in `sampleBetIntelligence.ts` |
-| **Save report** | Works if migrated | Requires `bet_intelligence_reports` migration |
-| **Add to tracker** | Works | Creates a pending bet from analysis or top pick |
-| **Report history** | Works if migrated | Loads from Supabase per user |
-
-### What is broken or unreliable
-
-| Feature | Typical failure | Root cause |
-|---------|-----------------|------------|
-| **Load top 5 from odds** | `Odds slate service is not configured` | Add `THE_ODDS_API_KEY` and `BALLDONTLIE_API_KEY` in Vercel, redeploy |
-| **Load top 5 from odds** | `HTTP 401` | Sign out/in; ensure `SUPABASE_URL` + `SUPABASE_ANON_KEY` set on Vercel for API auth |
-| **Load top 5 from odds** | `Could not reach odds slate API` | Network issue or API route not deployed; use `vercel dev` locally |
-| **Load top 5 from odds** | `HTTP 502` | Invalid Odds API key or quota exhausted |
-| **Enrich from stats API** | `503 not configured` | Add `BALLDONTLIE_API_KEY` in Vercel |
-| **Load top 5 from odds** | Empty results | Off-season, no US player prop markets listed, or books not returning P/R/A markets |
-| **Top Picks list empty** | "No picks cleared the quality bar" | Engine filters aggressively (edge ≥ 6, no trap flag, verdict Bet/Lean). Thin or sample data often fails the bar — **this is by design**, not a crash |
-| **Expecting "AI picks"** | Disappointing / "doesn't work" | **There is no AI.** Outputs are conservative heuristics from manual text fields, not predictive models |
-| **Live injury / stats context** | Always generic reasons | `intelligenceDataProvider` is a no-op stub; no API enriches scenarios automatically |
-
-### Why people think "the AI doesn't work"
-
-1. **Naming mismatch** — The UI says "Intelligence" but the system is rule-based math + text heuristics, not generative AI or ML.
-2. **Live odds path is fragile** — It depends on Supabase Edge Functions, JWT auth, third-party API keys, and browser network access to `*.supabase.co`. Any link in that chain breaks the button.
-3. **Production env drift** — Vite embeds Supabase URL/key at build time. If Vercel Production is missing `VITE_SUPABASE_ANON_KEY` or uses a key from a different project, every Edge Function invoke returns 401 even when local dev works.
-4. **Gateway JWT vs in-function auth** — Supabase's Edge Function gateway validates JWTs before your code runs. Misaligned keys or expired sessions surface as `Invalid JWT` before the function logic executes.
-5. **No live data pipeline** — Without injuries, minutes, pace, and form APIs wired in, projections default to conservative baselines; reports look generic or always "Pass."
-6. **Strict pick filtering** — Even when odds load successfully, the Top Picks scanner may show zero cards because scenarios fail quality thresholds.
-
-### Workarounds that work right now
-
-1. Use **Analyze Bet** with manual inputs (player, line, opening line, recent form text, injury notes).
-2. Click **Load samples** instead of **Load top 5 from odds** to populate the slate scanner offline.
-3. If odds load fails, the app falls back to sample scenarios automatically (see `TopPicksToday.tsx`).
-4. For live odds, verify Vercel has `THE_ODDS_API_KEY`, `BALLDONTLIE_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` and redeploy.
-
-### Bet Intelligence code map
-
-```
-src/types/betIntelligence.ts          Types
-src/lib/betIntelligenceEngine.ts      Main engine (NOT AI)
-src/lib/projectionEngine.ts           Projection heuristics
-src/lib/lineMovement.ts               Opening vs current line
-src/lib/edgeScoring.ts                Edge score + calibrated probability
-src/lib/simulationEngine.ts           Variance bands (not Monte Carlo live sim)
-src/lib/riskAssessment.ts             Risk flags
-src/lib/betIntelligenceService.ts     Supabase report CRUD
-src/lib/nbaOddsSlateService.ts        Vercel odds slate client
-src/lib/playerContextService.ts      Stats enrichment client
-lib/nbaOddsSlateCore.ts              Shared odds slate logic
-api/nba-odds-slate.ts                Vercel odds proxy
-api/player-context.ts                Vercel stats proxy
-src/hooks/useIntelligenceReports.ts   Report history hook
-src/components/intelligence/*         UI
-src/pages/BetIntelligencePage.tsx     Page shell
-src/data/sampleBetIntelligence.ts     Offline demo scenarios
-supabase/functions/nba-odds-slate/   Legacy Edge Function (optional)
-```
-
-### Production 401 checklist (Vercel + Supabase)
-
-1. Vercel **Production** env:
-   - `VITE_SUPABASE_URL` = `https://YOUR_PROJECT_REF.supabase.co`
-   - `VITE_SUPABASE_ANON_KEY` = anon key from **that same project**
-2. Redeploy after any env change (old builds keep old values).
-3. Clear browser site data / `localStorage` keys starting with `sb-`, then sign in again.
-4. Confirm `nba-odds-slate` is deployed in the same Supabase project as the URL ref.
-5. Confirm Edge Function secrets: `THE_ODDS_API_KEY`, `BALLDONTLIE_API_KEY`.
-
----
-
 ## Highlight Hub
 
 **Route:** `/live` (sidebar: **Highlight Hub**)
@@ -508,7 +366,6 @@ The YouTube API key must never be committed or exposed via `VITE_*` variables.
 | `npm run lint` | ESLint |
 | `npm run sb:login` | Supabase CLI login |
 | `npm run sb:link` | Link local repo to Supabase project |
-| `npm run sb:deploy:odds` | Deploy `nba-odds-slate` |
 | `npm run sb:deploy:settle` | Deploy `sync-bet-settlements` |
 
 ---
@@ -519,7 +376,7 @@ The YouTube API key must never be committed or exposed via `VITE_*` variables.
 - **Rotate keys** immediately if they are pasted in chat, logged, or checked into git.
 - **Service role key** is only for server routes (`keepalive`) — never import it in `src/`.
 - **Anon key** is safe for the browser but must pair with RLS policies on every table.
-- **Edge Function secrets** (`THE_ODDS_API_KEY`, `BALLDONTLIE_API_KEY`) live in Supabase Dashboard only.
+- **Edge Function secrets** (`BALLDONTLIE_API_KEY`, optional `CRON_SECRET`) live in Supabase Dashboard only.
 
 ---
 

@@ -11,7 +11,6 @@
     "sb": "supabase",
     "sb:login": "supabase login",
     "sb:link": "supabase link",
-    "sb:deploy:odds": "supabase functions deploy nba-odds-slate",
     "sb:deploy:settle": "supabase functions deploy sync-bet-settlements --no-verify-jwt"
   },
   "dependencies": {

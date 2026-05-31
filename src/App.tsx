@@ -13,7 +13,6 @@ import { MarketIntelligencePage } from "./pages/MarketIntelligencePage";
 import { BetHistoryPage } from "./pages/BetHistoryPage";
 import { LiveCenterPage } from "./pages/LiveCenterPage";
 import { SettingsPage } from "./pages/SettingsPage";
-import { BetIntelligencePage } from "./pages/BetIntelligencePage";
 import { signOut } from "./lib/auth";
 
 function App() {
@@ -46,9 +45,6 @@ function CourtLedgerApp({ session }: { session: Session }) {
     }
     if (location.pathname === "/settings") {
       return { title: "Settings", subtitle: "Account and preferences", active: "settings" as const };
-    }
-    if (location.pathname === "/intelligence") {
-      return { title: "Prop Analyzer", subtitle: "Rule-based analysis and board line scanner", active: "intelligence" as const };
     }
     return { title: "Command Center", subtitle: "Live tracking and execution dashboard", active: "command" as const };
   }, [location.pathname]);
@@ -121,17 +117,6 @@ function CourtLedgerApp({ session }: { session: Session }) {
           }
         />
         <Route path="/analytics" element={<AnalyticsPage bets={data.bets} />} />
-        <Route
-          path="/intelligence"
-          element={
-            <BetIntelligencePage
-              userId={session.user.id}
-              bets={data.bets}
-              saveLoading={data.saveLoading}
-              onAddFromIntelligence={data.addBetFromIntelligence}
-            />
-          }
-        />
         <Route path="/markets" element={<MarketIntelligencePage bets={data.bets} />} />
         <Route path="/live" element={<LiveCenterPage />} />
         <Route

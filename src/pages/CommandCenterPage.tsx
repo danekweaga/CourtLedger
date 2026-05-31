@@ -1,5 +1,4 @@
 import type { RefObject } from "react";
-import { NavLink } from "react-router-dom";
 import { BetForm } from "../components/bets/BetForm";
 import { ActiveBetsSection } from "../components/bets/ActiveBetsSection";
 import { SettledBetsSection } from "../components/bets/SettledBetsSection";
@@ -130,19 +129,6 @@ export function CommandCenterPage(props: CommandCenterPageProps) {
             Avg Odds: <span className="font-medium text-white">{summary.averageOdds > 0 ? `+${summary.averageOdds}` : summary.averageOdds}</span>
           </p>
         </article>
-      </section>
-
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-emerald-500/25 bg-surface-container/80 px-5 py-4 ring-1 ring-emerald-500/10">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400/90">Bet Intelligence</p>
-          <p className="mt-1 text-sm text-on-surface-variant">Structured prop analysis, edge score, trap checks — save reports to Supabase.</p>
-        </div>
-        <NavLink
-          to="/intelligence"
-          className="rounded-full bg-emerald-500/15 px-5 py-2.5 text-sm font-bold text-emerald-300 ring-1 ring-emerald-500/30 transition-colors hover:bg-emerald-500/25"
-        >
-          Open Intelligence
-        </NavLink>
       </section>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">

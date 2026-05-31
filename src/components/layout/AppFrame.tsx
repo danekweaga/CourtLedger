@@ -6,7 +6,7 @@ interface AppFrameProps {
   session: Session;
   title: string;
   subtitle?: string;
-  activeNav: "command" | "history" | "markets" | "analytics" | "live" | "settings" | "intelligence";
+  activeNav: "command" | "history" | "markets" | "analytics" | "live" | "settings";
   onAddBet: () => void;
   onSignOut: () => void;
   children: ReactNode;
@@ -18,7 +18,6 @@ const navItems = [
   { key: "live", label: "Highlight Hub", icon: "play_circle", to: "/live" },
   { key: "markets", label: "Market Intelligence", icon: "query_stats", to: "/markets" },
   { key: "analytics", label: "ROI Analytics", icon: "payments", to: "/analytics" },
-  { key: "intelligence", label: "Bet Intelligence", icon: "psychology", to: "/intelligence" },
   { key: "settings", label: "Settings", icon: "settings", to: "/settings" },
 ] as const;
 
@@ -107,7 +106,7 @@ export function AppFrame({ session, title, subtitle, activeNav, onAddBet, onSign
         <MobileItem to="/analytics" icon="analytics" label="Stats" active={activeNav === "analytics"} />
         <MobileItem to="/history" icon="history" label="History" active={activeNav === "history"} />
         <MobileItem to="/live" icon="play_circle" label="Highlights" active={activeNav === "live"} />
-        <MobileItem to="/intelligence" icon="psychology" label="Intel" active={activeNav === "intelligence"} />
+        <MobileItem to="/markets" icon="query_stats" label="Markets" active={activeNav === "markets"} />
         <MobileItem to="/settings" icon="settings" label="Settings" active={activeNav === "settings"} />
         <button
           type="button"
