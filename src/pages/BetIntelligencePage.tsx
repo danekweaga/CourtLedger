@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import type { Bet } from "../types/bets";
 import type {
   BetIntelligenceReportRow,
@@ -13,6 +14,7 @@ import { AnalysisResultCard } from "../components/intelligence/AnalysisResultCar
 import { TopPicksToday } from "../components/intelligence/TopPicksToday";
 import { useIntelligenceReports } from "../hooks/useIntelligenceReports";
 import { emptyIntelligenceScenario, parseInputSnapshot } from "../utils/intelligenceForm";
+import { fetchPlayerContext } from "../lib/playerContextService";
 
 interface BetIntelligencePageProps {
   userId: string;
@@ -30,7 +32,24 @@ export function BetIntelligencePage({ userId, bets, saveLoading = false, onAddFr
   const [scenario, setScenario] = useState(emptyIntelligenceScenario);
   const [report, setReport] = useState<IntelligenceReportResult | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [enriching, setEnriching] = useState(false);
   const [attachBetId, setAttachBetId] = useState<string>("");
+
+  async function handleEnrich() {
+    if (!scenario.player_name.trim()) {
+      return;
+    }
+    setEnriching(true);
+    try {
+      const patch = await fetchPlayerContext(scenario.player_name, scenario.market_type);
+      setScenario((prev) => ({ ...prev, ...patch }));
+      toast.success("Recent form updated from balldontlie.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not enrich scenario.");
+    } finally {
+      setEnriching(false);
+    }
+  }
 
   function handleAnalyze() {
     setAnalyzing(true);
@@ -78,15 +97,22 @@ export function BetIntelligencePage({ userId, bets, saveLoading = false, onAddFr
     <div className="space-y-10 pb-10">
       <header>
         <p className="text-xs font-bold uppercase tracking-[0.25em] text-emerald-400/90">NBA · Sharp tools</p>
-        <h1 className="font-headline text-3xl font-extrabold text-white md:text-4xl">Bet Intelligence</h1>
+        <h1 className="font-headline text-3xl font-extrabold text-white md:text-4xl">Prop Analyzer</h1>
         <p className="mt-2 max-w-2xl text-sm text-slate-400">
-          Rule-based analysis from your manual inputs and live odds when available. Save reports to Supabase, attach to open bets, and revisit history anytime.
+          Rule-based prop analysis from manual inputs, optional stats enrichment, and live board lines. Not AI — deterministic heuristics only.
         </p>
       </header>
 
       <div className="grid grid-cols-1 gap-8 xl:grid-cols-12">
         <div className="space-y-8 xl:col-span-5">
-          <BetIntelligencePanel scenario={scenario} onChange={setScenario} onAnalyze={handleAnalyze} analyzing={analyzing} />
+          <BetIntelligencePanel
+            scenario={scenario}
+            onChange={setScenario}
+            onAnalyze={handleAnalyze}
+            onEnrich={() => void handleEnrich()}
+            analyzing={analyzing}
+            enriching={enriching}
+          />
 
           {report && (
             <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/40 p-4">

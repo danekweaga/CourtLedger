@@ -4,6 +4,7 @@ import type {
   IntelligenceReportResult,
   IntelligenceVerdict,
   TopPickCardModel,
+  TopPickTier,
 } from "../types/betIntelligence";
 import { computeEdgeModel } from "./edgeScoring";
 import { analyzeLineMovement } from "./lineMovement";
@@ -244,7 +245,11 @@ export function analyzeBetIntelligence(input: BetIntelligenceScenarioInput): Int
   };
 }
 
-function toTopPickCard(scenario: BetIntelligenceScenarioInput, report: IntelligenceReportResult): TopPickCardModel {
+function toTopPickCard(
+  scenario: BetIntelligenceScenarioInput,
+  report: IntelligenceReportResult,
+  tier: TopPickTier,
+): TopPickCardModel {
   return {
     pick: report.pick,
     line: scenario.line,
@@ -252,6 +257,7 @@ function toTopPickCard(scenario: BetIntelligenceScenarioInput, report: Intellige
     hit_probability: report.calibrated_hit_probability,
     confidence: report.confidence,
     edge_score: report.edge_score,
+    tier,
     why_it_hits: report.main_reasons.slice(0, 4),
     what_changed_today: report.what_changed_today.slice(0, 4),
     hidden_edge: report.hidden_edge,
@@ -266,43 +272,52 @@ export interface TopPickWithScenario {
   scenario: BetIntelligenceScenarioInput;
 }
 
-function selectTopPickAnalyses(candidates: BetIntelligenceScenarioInput[]): { scenario: BetIntelligenceScenarioInput; report: IntelligenceReportResult }[] {
+function selectTopPickAnalyses(
+  candidates: BetIntelligenceScenarioInput[],
+): { scenario: BetIntelligenceScenarioInput; report: IntelligenceReportResult; tier: TopPickTier }[] {
   if (candidates.length === 0) {
     return [];
   }
+
   const analyzed = candidates.map((scenario) => ({
     scenario,
     report: analyzeBetIntelligence(scenario),
   }));
 
-  let filtered = analyzed.filter(
+  const strict = analyzed.filter(
     (x) => !x.report.trap_warning && x.report.edge_score >= 6 && (x.report.final_verdict === "Bet" || x.report.final_verdict === "Lean"),
   );
 
-  if (filtered.length < 2) {
-    filtered = analyzed.filter(
-      (x) => !x.report.trap_warning && x.report.edge_score >= 5 && x.report.final_verdict !== "Pass" && x.report.data_quality !== "Low",
-    );
+  if (strict.length > 0) {
+    strict.sort((a, b) => b.report.edge_score - a.report.edge_score || b.report.calibrated_hit_probability - a.report.calibrated_hit_probability);
+    return strict.slice(0, 5).map((x) => ({ ...x, tier: "strong" as const }));
   }
 
-  if (filtered.length < 1) {
-    return [];
+  const watch = analyzed.filter(
+    (x) => !x.report.trap_warning && x.report.edge_score >= 4 && x.report.final_verdict !== "Pass",
+  );
+
+  if (watch.length > 0) {
+    watch.sort((a, b) => b.report.edge_score - a.report.edge_score || b.report.calibrated_hit_probability - a.report.calibrated_hit_probability);
+    return watch.slice(0, 5).map((x) => ({ ...x, tier: "watch" as const }));
   }
 
-  filtered.sort((a, b) => b.report.edge_score - a.report.edge_score || b.report.calibrated_hit_probability - a.report.calibrated_hit_probability);
+  const board = [...analyzed].sort(
+    (a, b) => b.report.edge_score - a.report.edge_score || b.report.calibrated_hit_probability - a.report.calibrated_hit_probability,
+  );
 
-  return filtered.slice(0, 5);
+  return board.slice(0, 5).map((x) => ({ ...x, tier: "board" as const }));
 }
 
 export function buildTopPicksTodayWithScenarios(candidates: BetIntelligenceScenarioInput[]): TopPickWithScenario[] {
-  return selectTopPickAnalyses(candidates).map(({ scenario, report }) => ({
-    card: toTopPickCard(scenario, report),
+  return selectTopPickAnalyses(candidates).map(({ scenario, report, tier }) => ({
+    card: toTopPickCard(scenario, report, tier),
     scenario,
   }));
 }
 
 export function buildTopPicksToday(candidates: BetIntelligenceScenarioInput[]): TopPickCardModel[] {
-  return selectTopPickAnalyses(candidates).map(({ scenario, report }) => toTopPickCard(scenario, report));
+  return selectTopPickAnalyses(candidates).map(({ scenario, report, tier }) => toTopPickCard(scenario, report, tier));
 }
 
 export function summarizeSlate(picks: TopPickCardModel[], candidates: BetIntelligenceScenarioInput[]): string {

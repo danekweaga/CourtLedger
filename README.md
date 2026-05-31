@@ -287,7 +287,10 @@ Command Center bet form includes **Auto-settle** and optional stats API IDs. Gra
    - `VITE_SUPABASE_ANON_KEY`
    - `YOUTUBE_DATA_API_KEY`
    - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY` (server JWT validation for odds/player APIs)
    - `SUPABASE_SERVICE_ROLE_KEY`
+   - `THE_ODDS_API_KEY`
+   - `BALLDONTLIE_API_KEY`
 5. Deploy.
 
 `vercel.json` rewrites all non-API paths to `index.html` for client-side routing, while `/api/*` hits serverless functions.
@@ -299,7 +302,7 @@ Command Center bet form includes **Auto-settle** and optional stats API IDs. Gra
 - [ ] Charts render with real data
 - [ ] CSV / XLSX export downloads
 - [ ] Highlight Hub loads (after `YOUTUBE_DATA_API_KEY` is set)
-- [ ] Keepalive workflow runs (see below)
+- [ ] Prop Analyzer → Load top 5 from odds works (after `THE_ODDS_API_KEY` + `BALLDONTLIE_API_KEY` set)
 
 ---
 
@@ -319,25 +322,33 @@ Command Center bet form includes **Auto-settle** and optional stats API IDs. Gra
 - **Auth:** None for read; API key stays server-side
 - **Env:** `YOUTUBE_DATA_API_KEY`, optional `YOUTUBE_NBA_CHANNEL_ID`
 
+### `POST /api/nba-odds-slate`
+
+- **File:** `api/nba-odds-slate.ts`
+- **Purpose:** Load top 5 NBA player prop scenarios from The Odds API + balldontlie
+- **Auth:** Requires `Authorization: Bearer <supabase_user_jwt>`
+- **Env:** `THE_ODDS_API_KEY`, `BALLDONTLIE_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- **Client:** `src/lib/nbaOddsSlateService.ts`
+
+### `POST /api/player-context`
+
+- **File:** `api/player-context.ts`
+- **Purpose:** Enrich a scenario with season/recent stats from balldontlie
+- **Auth:** Requires `Authorization: Bearer <supabase_user_jwt>`
+- **Env:** `BALLDONTLIE_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- **Client:** `src/lib/playerContextService.ts`
+
 ---
 
 ## Supabase Edge Functions
 
-### `nba-odds-slate`
+### `nba-odds-slate` (legacy — optional)
 
-Powers **Bet Intelligence → Load top 5 from odds**.
-
-- One Odds API request (player points/rebounds/assists, US region)
-- Ranks lines by devigged implied probability
-- Returns up to 5 scenarios for the Top Picks scanner
-
-**Secrets:** `THE_ODDS_API_KEY`, `BALLDONTLIE_API_KEY`
+Supabase Edge Function version of the odds slate loader. **Production now uses `/api/nba-odds-slate` on Vercel** instead, to avoid gateway JWT issues. You can leave this undeployed unless you want a Supabase-only fallback.
 
 ```bash
 npx supabase functions deploy nba-odds-slate
 ```
-
-Requires a signed-in user (JWT). See [Bet Intelligence troubleshooting](#bet-intelligence--how-it-works-and-why-it-often-fails).
 
 ### `sync-bet-settlements`
 
@@ -383,7 +394,8 @@ This section is important: **Bet Intelligence is not powered by AI.** There is n
 | Sub-engines | `projectionEngine`, `lineMovement`, `edgeScoring`, `simulationEngine`, `riskAssessment` | Heuristics over your **manual** inputs |
 | Report UI | `AnalysisResultCard` | Structured verdict (Bet / Lean / Pass) |
 | Top Picks scanner | `TopPicksToday` | Runs the same engine over multiple scenarios |
-| Live odds loader | `nbaOddsSlateService` → Edge Function `nba-odds-slate` | Optional: pull real board lines from The Odds API |
+| Live odds loader | `nbaOddsSlateService` → `/api/nba-odds-slate` (Vercel) | Pull real board lines from The Odds API |
+| Stats enrichment | `playerContextService` → `/api/player-context` (Vercel) | balldontlie season/recent form |
 | Report persistence | `bet_intelligence_reports` table | Save/load analysis history |
 | Data provider stub | `intelligenceDataProvider.ts` | **Not implemented** — no live injuries, stats, or lineups feed |
 
@@ -391,8 +403,8 @@ This section is important: **Bet Intelligence is not powered by AI.** There is n
 flowchart LR
   ManualInput[Manual form inputs] --> Engine[betIntelligenceEngine]
   Engine --> Report[Analysis report]
-  OddsButton[Load top 5 from odds] --> EdgeFn[nba-odds-slate Edge Function]
-  EdgeFn --> Scenarios[Scenario rows]
+  OddsButton[Load top 5 from odds] --> VercelApi[/api/nba-odds-slate]
+  VercelApi --> OddsAPI[The Odds API]
   Scenarios --> Engine
   LiveFeeds[Live stats / injuries / AI] -.->|not wired| Engine
 ```
@@ -411,10 +423,11 @@ flowchart LR
 
 | Feature | Typical failure | Root cause |
 |---------|-----------------|------------|
-| **Load top 5 from odds** | `Could not reach Supabase Edge Functions` | Browser never gets a response — ad blocker, VPN, corporate firewall, or wrong `VITE_SUPABASE_URL` |
-| **Load top 5 from odds** | `HTTP 401 Invalid JWT` | Production env mismatch: `VITE_SUPABASE_ANON_KEY` / URL not from the same Supabase project where `nba-odds-slate` is deployed; stale session in `localStorage` |
-| **Load top 5 from odds** | `HTTP 404` | Edge Function not deployed, or frontend points at a different Supabase project ref |
-| **Load top 5 from odds** | `HTTP 500` / `502` | Missing Edge Function secrets (`THE_ODDS_API_KEY`, `BALLDONTLIE_API_KEY`) or Odds API quota exhausted |
+| **Load top 5 from odds** | `Odds slate service is not configured` | Add `THE_ODDS_API_KEY` and `BALLDONTLIE_API_KEY` in Vercel, redeploy |
+| **Load top 5 from odds** | `HTTP 401` | Sign out/in; ensure `SUPABASE_URL` + `SUPABASE_ANON_KEY` set on Vercel for API auth |
+| **Load top 5 from odds** | `Could not reach odds slate API` | Network issue or API route not deployed; use `vercel dev` locally |
+| **Load top 5 from odds** | `HTTP 502` | Invalid Odds API key or quota exhausted |
+| **Enrich from stats API** | `503 not configured` | Add `BALLDONTLIE_API_KEY` in Vercel |
 | **Load top 5 from odds** | Empty results | Off-season, no US player prop markets listed, or books not returning P/R/A markets |
 | **Top Picks list empty** | "No picks cleared the quality bar" | Engine filters aggressively (edge ≥ 6, no trap flag, verdict Bet/Lean). Thin or sample data often fails the bar — **this is by design**, not a crash |
 | **Expecting "AI picks"** | Disappointing / "doesn't work" | **There is no AI.** Outputs are conservative heuristics from manual text fields, not predictive models |
@@ -434,12 +447,7 @@ flowchart LR
 1. Use **Analyze Bet** with manual inputs (player, line, opening line, recent form text, injury notes).
 2. Click **Load samples** instead of **Load top 5 from odds** to populate the slate scanner offline.
 3. If odds load fails, the app falls back to sample scenarios automatically (see `TopPicksToday.tsx`).
-4. For live odds, verify the full chain:
-   - Same Supabase project ref in `.env`, Vercel Production, and Edge Function deploy target
-   - `nba-odds-slate` deployed with secrets set
-   - Sign out, clear site data, sign in again
-   - Disable ad blockers for your app domain and `*.supabase.co`
-   - Check **Supabase → Edge Functions → nba-odds-slate → Logs**
+4. For live odds, verify Vercel has `THE_ODDS_API_KEY`, `BALLDONTLIE_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` and redeploy.
 
 ### Bet Intelligence code map
 
@@ -452,12 +460,16 @@ src/lib/edgeScoring.ts                Edge score + calibrated probability
 src/lib/simulationEngine.ts           Variance bands (not Monte Carlo live sim)
 src/lib/riskAssessment.ts             Risk flags
 src/lib/betIntelligenceService.ts     Supabase report CRUD
-src/lib/nbaOddsSlateService.ts        Edge Function client + error mapping
+src/lib/nbaOddsSlateService.ts        Vercel odds slate client
+src/lib/playerContextService.ts      Stats enrichment client
+lib/nbaOddsSlateCore.ts              Shared odds slate logic
+api/nba-odds-slate.ts                Vercel odds proxy
+api/player-context.ts                Vercel stats proxy
 src/hooks/useIntelligenceReports.ts   Report history hook
 src/components/intelligence/*         UI
 src/pages/BetIntelligencePage.tsx     Page shell
 src/data/sampleBetIntelligence.ts     Offline demo scenarios
-supabase/functions/nba-odds-slate/    Live odds Edge Function
+supabase/functions/nba-odds-slate/   Legacy Edge Function (optional)
 ```
 
 ### Production 401 checklist (Vercel + Supabase)

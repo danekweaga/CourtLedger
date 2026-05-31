@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import type { BetIntelligenceScenarioInput } from "../../types/betIntelligence";
+import type { BetIntelligenceScenarioInput, TopPickTier } from "../../types/betIntelligence";
 import { buildTopPicksTodayWithScenarios, summarizeSlate } from "../../lib/betIntelligenceEngine";
 import { fetchNbaOddsSlateScenarios } from "../../lib/nbaOddsSlateService";
 import { sampleBetIntelligenceScenarios } from "../../data/sampleBetIntelligence";
@@ -12,6 +12,26 @@ interface TopPicksTodayProps {
 }
 
 const ODDS_LOAD_COOLDOWN_MS = 90_000;
+
+function tierLabel(tier: TopPickTier): string {
+  if (tier === "strong") {
+    return "Strong";
+  }
+  if (tier === "watch") {
+    return "Watch";
+  }
+  return "Board line";
+}
+
+function tierClass(tier: TopPickTier): string {
+  if (tier === "strong") {
+    return "bg-emerald-500/20 text-emerald-300";
+  }
+  if (tier === "watch") {
+    return "bg-amber-500/20 text-amber-200";
+  }
+  return "bg-slate-700/60 text-slate-300";
+}
 
 function toNumberOr(value: string, fallback: number): number {
   const parsed = Number(value);
@@ -98,9 +118,8 @@ export function TopPicksToday({ saveLoading = false, onAddToTracker }: TopPicksT
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-400/90">Top Picks Today</p>
           <h3 className="font-headline text-lg font-bold text-white">Slate scanner</h3>
           <p className="mt-1 max-w-xl text-xs text-slate-500">
-            Enter scenarios manually, load demos, or pull up to <span className="font-bold text-slate-300">5 board lines</span> ranked by
-            devigged implied probability (points / rebounds / assists only). Uses one Odds API request per click — 90s cooldown to protect free
-            tiers. Not betting advice.
+            Board lines ranked by devigged implied probability (points / rebounds / assists). One Odds API request per click — 90s cooldown.
+            Picks show as Strong, Watch, or Board line based on rule-based edge filters — not AI predictions.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -198,7 +217,7 @@ export function TopPicksToday({ saveLoading = false, onAddToTracker }: TopPicksT
 
       {picks.length === 0 ? (
         <p className="mt-6 rounded-lg border border-dashed border-slate-700 p-6 text-center text-sm text-slate-500">
-          No picks cleared the quality bar. Tighten lines, add opening numbers and form, or use &quot;Load samples&quot;.
+          Add player and team to at least one row, or use &quot;Load samples&quot; / &quot;Load top 5 from odds&quot;.
         </p>
       ) : (
         <div className="mt-6 space-y-4">
@@ -222,6 +241,7 @@ export function TopPicksToday({ saveLoading = false, onAddToTracker }: TopPicksT
                       Add to tracker
                     </button>
                   )}
+                  <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${tierClass(p.tier)}`}>{tierLabel(p.tier)}</span>
                   <span className="rounded-full bg-slate-800 px-2 py-1 text-[10px] font-bold text-cyan-300">{p.best_time_to_bet}</span>
                 </div>
               </div>

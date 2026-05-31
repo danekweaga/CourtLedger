@@ -1,12 +1,23 @@
 import type { BetIntelligenceScenarioInput } from "../types/betIntelligence";
+import { fetchPlayerContext } from "./playerContextService";
 
 /**
- * Future hook for live injuries, odds, lineups, and stats.
- * MVP uses manual fields on `BetIntelligenceScenarioInput` only.
+ * Enriches manual scenarios with balldontlie stats via the Vercel API proxy.
  */
 export interface IntelligenceDataProvider {
   readonly id: string;
   enrichScenario(input: BetIntelligenceScenarioInput): Promise<Partial<BetIntelligenceScenarioInput>>;
+}
+
+export class BalldontlieIntelligenceDataProvider implements IntelligenceDataProvider {
+  readonly id = "balldontlie";
+
+  async enrichScenario(input: BetIntelligenceScenarioInput): Promise<Partial<BetIntelligenceScenarioInput>> {
+    if (!input.player_name.trim()) {
+      return {};
+    }
+    return fetchPlayerContext(input.player_name, input.market_type);
+  }
 }
 
 export class ManualIntelligenceDataProvider implements IntelligenceDataProvider {
@@ -18,4 +29,4 @@ export class ManualIntelligenceDataProvider implements IntelligenceDataProvider 
   }
 }
 
-export const defaultIntelligenceDataProvider = new ManualIntelligenceDataProvider();
+export const defaultIntelligenceDataProvider = new BalldontlieIntelligenceDataProvider();

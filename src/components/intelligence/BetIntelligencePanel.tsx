@@ -8,7 +8,9 @@ interface BetIntelligencePanelProps {
   scenario: BetIntelligenceScenarioInput;
   onChange: (next: BetIntelligenceScenarioInput) => void;
   onAnalyze: () => void;
+  onEnrich?: () => void;
   analyzing: boolean;
+  enriching?: boolean;
 }
 
 function toNumberOr(value: string, fallback: number): number {
@@ -24,7 +26,7 @@ function toNullableNumber(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-export function BetIntelligencePanel({ scenario, onChange, onAnalyze, analyzing }: BetIntelligencePanelProps) {
+export function BetIntelligencePanel({ scenario, onChange, onAnalyze, onEnrich, analyzing, enriching = false }: BetIntelligencePanelProps) {
   const set = <K extends keyof BetIntelligenceScenarioInput>(key: K, value: BetIntelligenceScenarioInput[K]) => {
     onChange({ ...scenario, [key]: value });
   };
@@ -35,7 +37,7 @@ export function BetIntelligencePanel({ scenario, onChange, onAnalyze, analyzing 
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-400/90">Manual scenario</p>
           <h3 className="font-headline text-lg font-bold text-white">Build your prop</h3>
-          <p className="mt-1 text-xs text-slate-500">NBA only. Add context — the engine stays conservative when data is thin.</p>
+          <p className="mt-1 text-xs text-slate-500">Rule-based analyzer — add context or enrich from stats API before running analysis.</p>
         </div>
       </div>
 
@@ -170,14 +172,26 @@ export function BetIntelligencePanel({ scenario, onChange, onAnalyze, analyzing 
         </label>
       </div>
 
-      <button
-        type="button"
-        disabled={analyzing || !scenario.player_name.trim()}
-        onClick={onAnalyze}
-        className="primary-gradient mt-6 w-full rounded-xl py-3 text-sm font-extrabold text-[#003915] shadow-lg disabled:opacity-50"
-      >
-        {analyzing ? "Analyzing…" : "Analyze Bet"}
-      </button>
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+        {onEnrich && (
+          <button
+            type="button"
+            disabled={enriching || analyzing || !scenario.player_name.trim()}
+            onClick={onEnrich}
+            className="w-full rounded-xl border border-cyan-500/35 bg-cyan-500/10 py-3 text-sm font-bold text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-50 sm:flex-1"
+          >
+            {enriching ? "Enriching…" : "Enrich from stats API"}
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={analyzing || enriching || !scenario.player_name.trim()}
+          onClick={onAnalyze}
+          className="primary-gradient w-full rounded-xl py-3 text-sm font-extrabold text-[#003915] shadow-lg disabled:opacity-50 sm:flex-1"
+        >
+          {analyzing ? "Analyzing…" : "Analyze Bet"}
+        </button>
+      </div>
     </div>
   );
 }

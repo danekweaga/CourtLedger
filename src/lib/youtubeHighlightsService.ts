@@ -12,6 +12,7 @@ export interface HighlightsResponse {
   count?: number;
   highlights: HighlightVideo[];
   error?: string;
+  hint?: string;
 }
 
 function normalizeHighlight(raw: unknown): HighlightVideo | null {
@@ -45,7 +46,8 @@ export async function fetchNbaHighlights(): Promise<HighlightVideo[]> {
   }
 
   if (!response.ok || !payload.ok) {
-    throw new Error(payload.error ?? `Failed to load highlights (HTTP ${response.status}).`);
+    const detail = payload.hint ? `${payload.error ?? "Failed to load highlights"}. ${payload.hint}` : payload.error;
+    throw new Error(detail ?? `Failed to load highlights (HTTP ${response.status}).`);
   }
 
   return (payload.highlights ?? [])

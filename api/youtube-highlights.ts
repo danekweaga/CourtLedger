@@ -143,6 +143,9 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       ok: false,
       timestamp,
       error: isConfig ? "Highlight service is not configured" : "Failed to load highlights",
+      hint: isConfig
+        ? "Add YOUTUBE_DATA_API_KEY in Vercel → Project Settings → Environment Variables (Production), then redeploy."
+        : undefined,
     });
   }
 }

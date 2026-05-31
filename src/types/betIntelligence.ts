@@ -83,6 +83,8 @@ export interface BetIntelligenceReportRow {
   updated_at: string;
 }
 
+export type TopPickTier = "strong" | "watch" | "board";
+
 export interface TopPickCardModel {
   pick: string;
   line: number;
@@ -90,6 +92,7 @@ export interface TopPickCardModel {
   hit_probability: number;
   confidence: IntelligenceConfidence;
   edge_score: number;
+  tier: TopPickTier;
   why_it_hits: string[];
   what_changed_today: string[];
   hidden_edge: string;

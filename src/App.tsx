@@ -48,7 +48,7 @@ function CourtLedgerApp({ session }: { session: Session }) {
       return { title: "Settings", subtitle: "Account and preferences", active: "settings" as const };
     }
     if (location.pathname === "/intelligence") {
-      return { title: "Bet Intelligence", subtitle: "Structured prop analysis and slate scan", active: "intelligence" as const };
+      return { title: "Prop Analyzer", subtitle: "Rule-based analysis and board line scanner", active: "intelligence" as const };
     }
     return { title: "Command Center", subtitle: "Live tracking and execution dashboard", active: "command" as const };
   }, [location.pathname]);
