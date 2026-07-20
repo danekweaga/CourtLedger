@@ -79,8 +79,28 @@ CREATE TABLE IF NOT EXISTS public.live_stats_cache (
   UNIQUE (bet_id, user_id)
 );
 
-CREATE INDEX IF NOT EXISTS live_stats_cache_user_id_idx
-  ON public.live_stats_cache (user_id);
+ALTER TABLE public.live_stats_cache
+  ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users (id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS bet_id uuid REFERENCES public.bets (id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS current_stat_value numeric NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS live_status text NOT NULL DEFAULT 'not_started',
+  ADD COLUMN IF NOT EXISTS game_status text,
+  ADD COLUMN IF NOT EXISTS player_active_status text,
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'live_stats_cache'
+      AND column_name = 'user_id'
+  ) THEN
+    CREATE INDEX IF NOT EXISTS live_stats_cache_user_id_idx
+      ON public.live_stats_cache (user_id);
+  END IF;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- Table: keepalive_ping (anon-readable; no user data)
@@ -194,35 +214,46 @@ CREATE POLICY "Users can delete own profile"
 -- ---------------------------------------------------------------------------
 ALTER TABLE public.live_stats_cache ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Users can view own live stats" ON public.live_stats_cache;
-DROP POLICY IF EXISTS "Users can insert own live stats" ON public.live_stats_cache;
-DROP POLICY IF EXISTS "Users can update own live stats" ON public.live_stats_cache;
-DROP POLICY IF EXISTS "Users can delete own live stats" ON public.live_stats_cache;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'live_stats_cache'
+      AND column_name = 'user_id'
+  ) THEN
+    DROP POLICY IF EXISTS "Users can view own live stats" ON public.live_stats_cache;
+    DROP POLICY IF EXISTS "Users can insert own live stats" ON public.live_stats_cache;
+    DROP POLICY IF EXISTS "Users can update own live stats" ON public.live_stats_cache;
+    DROP POLICY IF EXISTS "Users can delete own live stats" ON public.live_stats_cache;
 
-CREATE POLICY "Users can view own live stats"
-  ON public.live_stats_cache
-  FOR SELECT
-  TO authenticated
-  USING (auth.uid() = user_id);
+    CREATE POLICY "Users can view own live stats"
+      ON public.live_stats_cache
+      FOR SELECT
+      TO authenticated
+      USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can insert own live stats"
-  ON public.live_stats_cache
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id);
+    CREATE POLICY "Users can insert own live stats"
+      ON public.live_stats_cache
+      FOR INSERT
+      TO authenticated
+      WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can update own live stats"
-  ON public.live_stats_cache
-  FOR UPDATE
-  TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+    CREATE POLICY "Users can update own live stats"
+      ON public.live_stats_cache
+      FOR UPDATE
+      TO authenticated
+      USING (auth.uid() = user_id)
+      WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can delete own live stats"
-  ON public.live_stats_cache
-  FOR DELETE
-  TO authenticated
-  USING (auth.uid() = user_id);
+    CREATE POLICY "Users can delete own live stats"
+      ON public.live_stats_cache
+      FOR DELETE
+      TO authenticated
+      USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- RLS: keepalive_ping (read-only ping; no secrets or user data)
