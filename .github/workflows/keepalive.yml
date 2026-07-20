@@ -10,6 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping Vercel keepalive endpoint
+        env:
+          KEEPALIVE_URL: ${{ secrets.KEEPALIVE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
+          if [ -z "$KEEPALIVE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "KEEPALIVE_URL and CRON_SECRET repository secrets are required."
+            exit 1
+          fi
           curl --fail --silent --show-error --location --max-time 30 \
-            "https://YOUR-APP-NAME.vercel.app/api/keepalive"
+            --header "x-cron-secret: ${CRON_SECRET}" \
+            "${KEEPALIVE_URL%/}/api/keepalive"

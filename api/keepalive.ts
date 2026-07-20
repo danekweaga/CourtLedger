@@ -1,7 +1,10 @@
-import { getSupabaseAdminClient } from "../lib/supabaseAdmin";
+import { readCronSecretHeader, verifyCronSecretRequest } from "../lib/cronAuth";
+import { getSupabaseAnonServerClient } from "../lib/supabaseServerAnon";
 
 type ApiRequest = {
   method?: string;
+  headers?: Record<string, string | string[] | undefined>;
+  url?: string;
 };
 
 type ApiResponse = {
@@ -23,9 +26,28 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return;
   }
 
+  const auth = verifyCronSecretRequest(
+    process.env.CRON_SECRET,
+    readCronSecretHeader(req.headers),
+    req.url,
+  );
+  if (!auth.ok) {
+    res.status(auth.status).json({
+      ok: false,
+      timestamp,
+      error: auth.message,
+    });
+    return;
+  }
+
+  if (req.method === "HEAD") {
+    res.status(200).json({ ok: true, timestamp });
+    return;
+  }
+
   try {
-    const supabase = getSupabaseAdminClient();
-    const { error } = await supabase.from("bets").select("id").limit(1);
+    const supabase = getSupabaseAnonServerClient();
+    const { error } = await supabase.from("keepalive_ping").select("id").limit(1);
 
     if (error) {
       throw error;
@@ -35,7 +57,6 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       ok: true,
       timestamp,
       message: "Keepalive completed",
-      query: "select id from bets limit 1",
     });
   } catch (error) {
     console.error("[keepalive] Supabase keepalive query failed", error);

@@ -83,9 +83,9 @@ flowchart TB
 |-------|------|
 | **React + Vite** | Single-page app, client routing, UI |
 | **Supabase client** | Auth, CRUD on `bets` |
-| **Vercel serverless** | Server-only secrets (YouTube, Supabase service role for keepalive) |
-| **Supabase Edge Functions** | Auto-settlement cron target |
-| **GitHub Actions** | Weekly ping to keep Vercel + Supabase warm |
+| **Vercel serverless** | Server-only secrets (YouTube, keepalive cron auth) |
+| **Supabase Edge Functions** | Auto-settlement cron target (service role + mandatory `CRON_SECRET`) |
+| **GitHub Actions** | Optional weekly keepalive ping (requires repository secrets) |
 
 ---
 
@@ -133,7 +133,11 @@ CourtLedger/
 │   ├── keepalive.ts              # Weekly Supabase ping
 │   └── youtube-highlights.ts     # YouTube Data API proxy
 ├── lib/
-│   └── supabaseAdmin.ts          # Server-only Supabase client (service role)
+│   ├── cronAuth.ts               # Shared cron secret verification
+│   └── supabaseServerAnon.ts     # Server-side anon client (keepalive only)
+├── tests/
+│   ├── cronAuth.test.ts          # Unit tests for cron auth
+│   └── rls-isolation.test.ts     # RLS integration tests (requires Supabase env)
 ├── src/
 │   ├── pages/                    # Route-level pages
 │   ├── components/               # UI by domain (bets, auth, layout, …)
@@ -194,7 +198,13 @@ CourtLedger/
    npx vercel dev
    ```
 
-   Then hit `http://localhost:3000/api/keepalive` or `/api/youtube-highlights`.
+   Then hit `http://localhost:3000/api/youtube-highlights`.
+
+   Keepalive requires the `x-cron-secret` header:
+
+   ```bash
+   curl -H "x-cron-secret: YOUR_CRON_SECRET" http://localhost:3000/api/keepalive
+   ```
 
 ### Supabase CLI (Windows-friendly)
 
@@ -204,9 +214,12 @@ The CLI is in `devDependencies`. From the project root:
 npx supabase login
 npx supabase link --project-ref YOUR_PROJECT_REF
 npx supabase db push
+npx supabase secrets set CRON_SECRET=your_long_random_secret
 npx supabase secrets set BALLDONTLIE_API_KEY=your_key
 npx supabase functions deploy sync-bet-settlements --no-verify-jwt
 ```
+
+`--no-verify-jwt` is used only because schedulers invoke the function with a shared secret instead of a user JWT. The function **fails closed** unless `CRON_SECRET` is configured and sent in the `x-cron-secret` header. Never pass secrets in query strings.
 
 Or use npm scripts: `npm run sb:login`, `npm run sb:link`, `npm run sb:deploy:settle`.
 
@@ -227,12 +240,21 @@ These are baked into the build at deploy time. Changing them in Vercel requires 
 
 | Variable | Where used |
 |----------|------------|
-| `SUPABASE_URL` | `lib/supabaseAdmin.ts` (keepalive) |
-| `SUPABASE_SERVICE_ROLE_KEY` | `lib/supabaseAdmin.ts` (keepalive) |
+| `SUPABASE_URL` | `lib/supabaseServerAnon.ts` (keepalive) |
+| `SUPABASE_ANON_KEY` | `lib/supabaseServerAnon.ts` (keepalive) |
+| `CRON_SECRET` | `api/keepalive.ts` (mandatory) |
 | `YOUTUBE_DATA_API_KEY` | `api/youtube-highlights.ts` |
 | `YOUTUBE_NBA_CHANNEL_ID` | Optional override for Highlight Hub channel |
 
 **Do not** prefix server secrets with `VITE_`. Do not commit API keys to git.
+
+### Supabase Edge Function secrets (Supabase Dashboard only)
+
+| Variable | Where used |
+|----------|------------|
+| `CRON_SECRET` | `sync-bet-settlements` (mandatory) |
+| `BALLDONTLIE_API_KEY` | `sync-bet-settlements` |
+| `SUPABASE_SERVICE_ROLE_KEY` | `sync-bet-settlements` (auto-settle only; never on Vercel) |
 
 ---
 
@@ -240,11 +262,13 @@ These are baked into the build at deploy time. Changing them in Vercel requires 
 
 ### Expected tables
 
-- `profiles` — user profile rows
-- `bets` — main betting ledger
-- `live_stats_cache` — reserved for future live data
-
-All tables should use RLS so users only access their own `user_id` rows.
+| Table | RLS | Scope |
+|-------|-----|-------|
+| `bets` | Enabled | `auth.uid() = user_id` |
+| `profiles` | Enabled | `auth.uid() = id` |
+| `live_stats_cache` | Enabled | `auth.uid() = user_id` |
+| `bet_intelligence_reports` | Enabled | `auth.uid() = user_id` |
+| `keepalive_ping` | Enabled | Read-only ping row; no user data |
 
 ### Migrations
 
@@ -252,6 +276,8 @@ Run in Supabase **SQL Editor** or via `supabase db push`:
 
 | File | Purpose |
 |------|---------|
+| `supabase/migrations/20260330100000_initial_schema.sql` | Core tables + RLS policies |
+| `supabase/migrations/20260330120000_bet_intelligence_reports.sql` | Intelligence reports table + RLS |
 | `supabase/migrations/20260330140000_bets_auto_settle.sql` | Auto-settle columns on `bets` |
 
 The app uses **column pruning** on insert/update, so older schemas still load until you migrate.
@@ -274,9 +300,10 @@ Command Center bet form includes **Auto-settle** and optional stats API IDs. Gra
 4. Set environment variables (Production + Preview as needed):
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
-   - `YOUTUBE_DATA_API_KEY`
    - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `SUPABASE_ANON_KEY`
+   - `CRON_SECRET`
+   - `YOUTUBE_DATA_API_KEY`
 5. Deploy.
 
 `vercel.json` rewrites all non-API paths to `index.html` for client-side routing, while `/api/*` hits serverless functions.
@@ -296,9 +323,9 @@ Command Center bet form includes **Auto-settle** and optional stats API IDs. Gra
 ### `GET /api/keepalive`
 
 - **File:** `api/keepalive.ts`
-- **Purpose:** Lightweight Supabase query (`select id from bets limit 1`) to keep the database connection path warm
-- **Auth:** None (public ping; returns no sensitive row data)
-- **Env:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- **Purpose:** Lightweight anon-key ping against the `keepalive_ping` table (no user data)
+- **Auth:** Mandatory `x-cron-secret` header matching `CRON_SECRET`; rejects secrets in query strings; fails closed if `CRON_SECRET` is missing
+- **Env:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `CRON_SECRET`
 
 ### `GET /api/youtube-highlights`
 
@@ -315,30 +342,32 @@ Command Center bet form includes **Auto-settle** and optional stats API IDs. Gra
 
 Auto-grades pending bets with `auto_settle_enabled` using balldontlie box scores.
 
-**Secrets:** `BALLDONTLIE_API_KEY`, optional `CRON_SECRET`
+**Secrets:** `BALLDONTLIE_API_KEY`, `CRON_SECRET` (mandatory), `SUPABASE_SERVICE_ROLE_KEY`
+
+**Auth:** `POST` only. Mandatory `x-cron-secret` header; rejects secrets in query strings; fails closed if `CRON_SECRET` is missing.
 
 ```bash
+npx supabase secrets set CRON_SECRET=your_long_random_secret
 npx supabase functions deploy sync-bet-settlements --no-verify-jwt
 ```
 
-Invoke on a schedule (GitHub Actions, pg_cron, etc.) during game windows. Moneyline, spread, and game totals are **not** auto-graded.
+Invoke on a schedule during game windows with the same `x-cron-secret` header. Moneyline, spread, and game totals are **not** auto-graded.
 
 ---
 
 ## Keep-alive system
 
-Inactive free-tier projects can pause. CourtLedger includes a weekly ping:
+Inactive free-tier projects can pause. CourtLedger includes an optional weekly ping:
 
 1. **GitHub Actions** — `.github/workflows/keepalive.yml`
    - Cron: Mondays 09:00 UTC
    - Manual trigger: `workflow_dispatch`
-   - Calls your deployed endpoint with `curl --fail`
+   - Requires repository secrets: `KEEPALIVE_URL` (e.g. `https://court-ledger.vercel.app`) and `CRON_SECRET`
+   - Sends `x-cron-secret` in the request header (never in the URL)
 
-2. **Vercel endpoint** — `/api/keepalive` runs a minimal Supabase query.
+2. **Vercel endpoint** — `/api/keepalive` runs a minimal anon-key query against `keepalive_ping`.
 
-**Before enabling:** Edit `.github/workflows/keepalive.yml` and replace `YOUR-APP-NAME` with your real Vercel hostname (e.g. `court-ledger`).
-
-Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in Vercel for the keepalive function.
+Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `CRON_SECRET` in Vercel for the keepalive function.
 
 ---
 
@@ -364,6 +393,8 @@ The YouTube API key must never be committed or exposed via `VITE_*` variables.
 | `npm run build` | Typecheck + production build → `dist/` |
 | `npm run preview` | Preview production build locally |
 | `npm run lint` | ESLint |
+| `npm run test` | Unit tests + RLS tests (RLS tests skip without Supabase env) |
+| `npm run test:rls` | RLS isolation integration tests only |
 | `npm run sb:login` | Supabase CLI login |
 | `npm run sb:link` | Link local repo to Supabase project |
 | `npm run sb:deploy:settle` | Deploy `sync-bet-settlements` |
@@ -372,14 +403,30 @@ The YouTube API key must never be committed or exposed via `VITE_*` variables.
 
 ## Security notes
 
+Verified controls in this repository:
+
+- **RLS on user-owned tables** — `bets`, `profiles`, `live_stats_cache`, and `bet_intelligence_reports` are scoped with `auth.uid()` policies in version-controlled migrations.
+- **Cron auth fails closed** — `CRON_SECRET` is mandatory for `/api/keepalive` and `sync-bet-settlements`. Missing, empty, or incorrect secrets return `503`/`401`. Secrets must be sent in the `x-cron-secret` header, never query strings.
+- **No service role on Vercel** — keepalive uses the anon key against the non-sensitive `keepalive_ping` table.
+- **Service role isolation** — the Supabase service role key is used only inside the `sync-bet-settlements` Edge Function.
+- **Public highlight proxy** — `/api/youtube-highlights` keeps the YouTube API key server-side; it is intentionally unauthenticated read-only.
+- **RLS tests** — `tests/rls-isolation.test.ts` verifies cross-user read/update/settle/delete isolation when Supabase test env vars are configured.
+
+Operational requirements:
+
 - **Never commit** `.env`, service role keys, or third-party API keys.
 - **Rotate keys** immediately if they are pasted in chat, logged, or checked into git.
-- **Service role key** is only for server routes (`keepalive`) — never import it in `src/`.
-- **Anon key** is safe for the browser but must pair with RLS policies on every table.
-- **Edge Function secrets** (`BALLDONTLIE_API_KEY`, optional `CRON_SECRET`) live in Supabase Dashboard only.
+- **Anon key** is public in the browser bundle by design; security depends on RLS, not hiding the anon key.
+- **Apply migrations** to every Supabase environment before relying on RLS coverage.
+
+Not covered by automated tests in this repo:
+
+- Rate limiting on public API routes
+- WAF / bot protection at the CDN edge
+- Production Supabase dashboard settings (email confirmation, leaked password protection, etc.)
 
 ---
 
 ## License
 
-Private project — see repository owner for usage terms.
+This repository is public source code. No license file is included, so default copyright applies unless the repository owner adds one.

@@ -2,10 +2,11 @@
  * Grades pending bets with auto_settle_enabled using balldontlie NBA box scores.
  * Keep settlement math aligned with src/utils/propSettlement.ts and src/utils/grading.ts.
  *
- * Secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, BALLDONTLIE_API_KEY
- * Optional: CRON_SECRET — when set, require header x-cron-secret matching the value.
+ * Secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, BALLDONTLIE_API_KEY, CRON_SECRET
+ * Auth: mandatory x-cron-secret header (never query strings). Deploy with --no-verify-jwt.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { readCronSecretHeader, verifyCronSecretRequest } from "../_shared/cronAuth.ts";
 
 const BDL_BASE = "https://api.balldontlie.io/v1";
 
@@ -262,16 +263,20 @@ function inDateWindow(gameDate: string): boolean {
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== "POST" && req.method !== "GET") {
+  if (req.method !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
   }
 
-  const cronSecret = Deno.env.get("CRON_SECRET");
-  if (cronSecret) {
-    const h = req.headers.get("x-cron-secret");
-    if (h !== cronSecret) {
-      return new Response("Unauthorized", { status: 401 });
-    }
+  const auth = verifyCronSecretRequest(
+    Deno.env.get("CRON_SECRET"),
+    readCronSecretHeader(req.headers),
+    req.url,
+  );
+  if (!auth.ok) {
+    return new Response(JSON.stringify({ error: auth.message }), {
+      status: auth.status,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
