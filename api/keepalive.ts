@@ -1,5 +1,5 @@
-import { readCronSecretHeader, verifyCronSecretRequest } from "../lib/cronAuth";
-import { getSupabaseAnonServerClient } from "../lib/supabaseServerAnon";
+import { readCronSecretHeader, verifyCronSecretRequest } from "./_lib/cronAuth";
+import { getSupabaseAnonServerClient } from "./_lib/supabaseServerAnon";
 
 type ApiRequest = {
   method?: string;
