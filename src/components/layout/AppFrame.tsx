@@ -25,12 +25,14 @@ const navItems = [
 export function AppFrame({ session, title, subtitle, activeNav, onAddBet, onSignOut, children }: AppFrameProps) {
   return (
     <div className="min-h-screen bg-surface text-on-surface">
-      <aside className="fixed left-0 top-0 hidden h-screen w-64 flex-col border-r border-slate-800/50 bg-slate-900 lg:flex">
-        <div className="p-6">
-          <NavLink to="/" aria-label="CourtLedger home">
-            <CourtLedgerLogo className="h-24 w-auto max-w-full" />
+      <aside className="fixed left-0 top-0 z-40 hidden h-screen w-64 flex-col border-r border-slate-800/50 bg-surface lg:flex">
+        <div className="border-b border-slate-800/40 px-4 py-5">
+          <NavLink to="/" aria-label="CourtLedger home" className="block">
+            <CourtLedgerLogo className="mx-auto h-14 w-full max-w-[11rem] sm:h-16" />
           </NavLink>
-          <p className="mt-2 text-xs uppercase tracking-widest text-on-surface-variant">Tactical Command</p>
+          <p className="mt-3 text-center text-[10px] uppercase tracking-[0.2em] text-on-surface-variant">
+            Tactical Command
+          </p>
         </div>
         <nav className="flex-1 px-2 space-y-1">
           {navItems.map((item) => {
@@ -71,17 +73,17 @@ export function AppFrame({ session, title, subtitle, activeNav, onAddBet, onSign
         </div>
       </aside>
 
-      <header className="fixed top-0 z-50 flex w-full items-center justify-between border-b border-slate-800/20 bg-slate-950/70 px-6 py-4 backdrop-blur-xl lg:pl-72">
-        <div className="flex items-center gap-3">
+      <header className="fixed top-0 right-0 z-50 flex w-full items-center justify-between gap-3 border-b border-slate-800/20 bg-surface/95 px-4 py-3 backdrop-blur-xl lg:left-64 lg:w-[calc(100%-16rem)] lg:px-6">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <NavLink to="/" className="shrink-0 lg:hidden" aria-label="CourtLedger home">
-            <CourtLedgerLogo variant="icon" className="h-9 w-9" />
+            <CourtLedgerLogo variant="icon" className="h-10 w-10 rounded-lg" />
           </NavLink>
-          <div>
-            <h2 className="font-headline text-xl font-bold text-on-surface lg:text-2xl">{title}</h2>
-            {subtitle ? <p className="text-xs text-on-surface-variant">{subtitle}</p> : null}
+          <div className="min-w-0">
+            <h2 className="truncate font-headline text-lg font-bold text-on-surface lg:text-2xl">{title}</h2>
+            {subtitle ? <p className="truncate text-xs text-on-surface-variant">{subtitle}</p> : null}
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
           <NavLink className="hidden text-sm text-slate-400 hover:text-slate-200 md:block" to="/analytics">
             Analytics
           </NavLink>
@@ -100,30 +102,31 @@ export function AppFrame({ session, title, subtitle, activeNav, onAddBet, onSign
           <NavLink className="rounded-lg p-2 text-slate-400 hover:bg-slate-800/50 hover:text-slate-200" to="/settings">
             <span className="material-symbols-outlined">settings</span>
           </NavLink>
-          <div className="rounded-full border border-emerald-400/20 bg-surface-container-high px-2 py-1 text-xs text-slate-300">
+          <div className="hidden max-w-[8rem] truncate rounded-full border border-emerald-400/20 bg-surface-container-high px-2 py-1 text-xs text-slate-300 md:block lg:max-w-[12rem]">
             {session.user.email}
           </div>
         </div>
       </header>
 
-      <main className="pb-28 pt-24 lg:ml-64 lg:pb-10">
+      <main className="pb-28 pt-[4.75rem] lg:ml-64 lg:pb-10 lg:pt-20">
         <div className="mx-auto max-w-7xl px-6">{children}</div>
       </main>
 
-      <nav className="fixed bottom-0 left-0 z-50 flex w-full items-center justify-around rounded-t-3xl bg-slate-950/80 px-4 pb-6 pt-3 shadow-[0_-8px_30px_rgb(6,14,32,0.5)] backdrop-blur-2xl lg:hidden">
+      <nav className="fixed bottom-0 left-0 z-50 flex w-full items-center justify-between gap-0 rounded-t-3xl bg-surface/95 px-2 pb-5 pt-2 shadow-[0_-8px_30px_rgb(6,14,32,0.5)] backdrop-blur-2xl lg:hidden">
+        <MobileItem to="/" icon="dashboard" label="Home" active={activeNav === "command"} />
         <MobileItem to="/analytics" icon="analytics" label="Stats" active={activeNav === "analytics"} />
         <MobileItem to="/history" icon="history" label="History" active={activeNav === "history"} />
-        <MobileItem to="/live" icon="play_circle" label="Highlights" active={activeNav === "live"} />
-        <MobileItem to="/markets" icon="query_stats" label="Markets" active={activeNav === "markets"} />
-        <MobileItem to="/settings" icon="settings" label="Settings" active={activeNav === "settings"} />
+        <MobileItem to="/live" icon="play_circle" label="Live" active={activeNav === "live"} />
         <button
           type="button"
-          className="flex flex-col items-center justify-center rounded-2xl px-6 py-2 text-slate-500 transition-all duration-200 active:scale-90"
+          className="flex shrink-0 flex-col items-center justify-center rounded-2xl px-3 py-2 text-emerald-400 transition-all duration-200 active:scale-90"
           onClick={onAddBet}
         >
-          <span className="material-symbols-outlined">add_circle</span>
-          <span className="mt-1 text-[10px] font-bold uppercase tracking-widest">Add</span>
+          <span className="material-symbols-outlined text-[1.75rem]">add_circle</span>
+          <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wider">Add</span>
         </button>
+        <MobileItem to="/markets" icon="query_stats" label="Markets" active={activeNav === "markets"} />
+        <MobileItem to="/settings" icon="settings" label="Settings" active={activeNav === "settings"} />
       </nav>
     </div>
   );
@@ -135,12 +138,12 @@ function MobileItem({ to, icon, label, active }: { to: string; icon: string; lab
       to={to}
       className={
         active
-          ? "flex flex-col items-center justify-center rounded-2xl bg-emerald-500/20 px-6 py-2 text-emerald-400 transition-all duration-200 active:scale-90"
-          : "flex flex-col items-center justify-center px-6 py-2 text-slate-500 transition-all duration-200 active:scale-90"
+          ? "flex min-w-0 flex-1 flex-col items-center justify-center rounded-xl bg-emerald-500/20 px-1 py-2 text-emerald-400 transition-all duration-200 active:scale-90"
+          : "flex min-w-0 flex-1 flex-col items-center justify-center px-1 py-2 text-slate-500 transition-all duration-200 active:scale-90"
       }
     >
-      <span className="material-symbols-outlined">{icon}</span>
-      <span className="mt-1 text-[10px] font-bold uppercase tracking-widest">{label}</span>
+      <span className="material-symbols-outlined text-[1.35rem]">{icon}</span>
+      <span className="mt-0.5 w-full truncate text-center text-[9px] font-bold uppercase tracking-wider">{label}</span>
     </NavLink>
   );
 }

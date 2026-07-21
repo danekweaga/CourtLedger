@@ -24,7 +24,7 @@ export function AuthForm({ onLogin, onSignup, loading }: AuthFormProps) {
   return (
     <div className="mx-auto mt-10 w-full max-w-md rounded-xl border border-slate-800 bg-slate-900/70 p-6 shadow-lg">
       <div className="flex flex-col items-center text-center">
-        <CourtLedgerLogo className="h-20 w-auto" />
+        <CourtLedgerLogo className="h-16 w-full max-w-[13rem]" />
         <p className="mt-2 text-sm text-slate-400">NBA bet tracking dashboard</p>
       </div>
       <form className="mt-6 space-y-4" onSubmit={handleSubmit}>

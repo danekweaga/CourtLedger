@@ -4,13 +4,22 @@ interface CourtLedgerLogoProps {
 }
 
 export function CourtLedgerLogo({ variant = "full", className = "" }: CourtLedgerLogoProps) {
-  const src = variant === "icon" ? "/favicon.png" : "/court-ledger-logo.png";
+  if (variant === "icon") {
+    return (
+      <img
+        src="/court-ledger-logo.png"
+        alt="CourtLedger"
+        className={`shrink-0 object-cover object-top ${className}`}
+        decoding="async"
+      />
+    );
+  }
 
   return (
     <img
-      src={src}
+      src="/court-ledger-logo.png"
       alt="CourtLedger"
-      className={className}
+      className={`block max-w-full object-contain ${className}`}
       decoding="async"
     />
   );

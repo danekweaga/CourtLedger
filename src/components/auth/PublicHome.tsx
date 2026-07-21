@@ -9,7 +9,7 @@ export function PublicHome({ onContinue }: PublicHomeProps) {
     <div className="min-h-screen bg-surface text-on-surface">
       <main className="mx-auto flex min-h-screen max-w-6xl flex-col justify-center gap-10 px-6 py-12">
         <section className="space-y-5">
-          <CourtLedgerLogo className="h-28 w-auto md:h-36" />
+          <CourtLedgerLogo className="mx-auto h-24 w-full max-w-xs md:h-28" />
           <h1 className="font-headline text-4xl font-extrabold tracking-tight md:text-6xl">Track NBA Bets Like a Pro</h1>
           <p className="max-w-2xl text-sm text-on-surface-variant md:text-base">
             Log your positions, monitor live progress, measure ROI, and export your ledger in one tactical dashboard.
